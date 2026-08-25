@@ -5,6 +5,5 @@ jinja2
 openai
 requests
 yt-dlp
-python-dotenv
 gunicorn
 flask

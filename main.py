@@ -1,9 +1,7 @@
 import os
 from flask import Flask, request, render_template_string
 from openai import OpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
 
 app = Flask(__name__)
 
