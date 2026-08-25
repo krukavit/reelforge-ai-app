@@ -6,7 +6,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Ленивая инициализация клиента OpenAI
+_openai_client = None
+
+def get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+        _openai_client = OpenAI(api_key=api_key)
+    return _openai_client
 
 # HTML-шаблон главной страницы
 INDEX_HTML = """
@@ -67,6 +78,7 @@ def generate():
         return "Введи тему!", 400
 
     try:
+        client = get_openai_client()
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
