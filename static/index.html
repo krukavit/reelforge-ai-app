@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReelForge AI</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,sans-serif;background:#0a0a0f;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.logo{font-size:28px;font-weight:800;background:linear-gradient(135deg,#ff6b6b,#feca57);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.tagline{color:rgba(255,255,255,.4);font-size:14px;margin-bottom:40px}
+.card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:48px;width:100%;max-width:520px}
+.card h1{font-size:24px;font-weight:700;margin-bottom:8px}
+.card p{color:rgba(255,255,255,.5);font-size:15px;margin-bottom:32px}
+.upload-zone{border:2px dashed rgba(255,255,255,.15);border-radius:16px;padding:48px 24px;text-align:center;cursor:pointer;transition:all .3s;margin-bottom:24px}
+.upload-zone:hover{border-color:#ff6b6b;background:rgba(255,107,107,.05)}
+.upload-zone .icon{font-size:48px;margin-bottom:16px}
+.upload-zone h3{font-size:18px;font-weight:600;margin-bottom:8px}
+.upload-zone p{color:rgba(255,255,255,.4);font-size:14px;margin:0}
+#fileInput{display:none}
+.file-selected{display:none;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.2);border-radius:12px;padding:16px;margin-bottom:24px}
+.file-selected .filename{font-weight:600;margin-bottom:4px}
+.file-selected .filesize{font-size:13px;color:rgba(255,255,255,.4)}
+.settings{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+.setting label{display:block;font-size:13px;font-weight:600;color:rgba(255,255,255,.6);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.setting select{width:100%;padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#fff;font-size:15px;outline:none}
+.btn{width:100%;padding:16px;border-radius:12px;border:none;font-size:16px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#ff6b6b,#feca57);color:#0a0a0f}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.progress{display:none;margin-top:24px}
+.progress-bar{height:6px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(135deg,#ff6b6b,#feca57);border-radius:3px;width:0%;transition:width .3s}
+.progress-text{text-align:center;margin-top:12px;font-size:14px;color:rgba(255,255,255,.5)}
+.error{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:16px;margin-top:16px;color:#ef4444;font-size:14px}
+@media(max-width:480px){.card{padding:32px 24px}.settings{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="logo">ReelForge AI</div>
+<div class="tagline">Video to Reels in 60 seconds</div>
+<div class="card">
+<h1>Upload Video</h1>
+<p>Podcast, stream, interview or course - we will make viral Reels</p>
+<div class="upload-zone" id="uploadZone">
+<div class="icon">📹</div>
+<h3>Drag video here</h3>
+<p>Or click to select file<br>MP4, MOV, AVI up to 500MB</p>
+</div>
+<input type="file" id="fileInput" accept=".mp4,.mov,.avi,.mkv,.webm">
+<div class="file-selected" id="fileSelected">
+<div class="filename" id="filename"></div>
+<div class="filesize" id="filesize"></div>
+</div>
+<div class="settings">
+<div class="setting">
+<label>Number of Reels</label>
+<select id="numReels"><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option></select>
+</div>
+<div class="setting">
+<label>Language</label>
+<select id="language"><option value="ru" selected>Russian</option><option value="en">English</option><option value="es">Spanish</option></select>
+</div>
+</div>
+<button class="btn" id="processBtn" disabled>Create Reels</button>
+<div class="progress" id="progress">
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+<div class="progress-text" id="progressText">Uploading video...</div>
+</div>
+<div class="error" id="error"></div>
+</div>
+<script>
+const uploadZone=document.getElementById('uploadZone');
+const fileInput=document.getElementById('fileInput');
+const processBtn=document.getElementById('processBtn');
+const fileSelected=document.getElementById('fileSelected');
+const filename=document.getElementById('filename');
+const filesize=document.getElementById('filesize');
+const progress=document.getElementById('progress');
+const progressFill=document.getElementById('progressFill');
+const progressText=document.getElementById('progressText');
+const error=document.getElementById('error');
+let selectedFile=null;
+uploadZone.addEventListener('click',()=>fileInput.click());
+uploadZone.addEventListener('dragover',e=>{e.preventDefault()});
+uploadZone.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)handleFile(e.dataTransfer.files[0])});
+fileInput.addEventListener('change',e=>{if(e.target.files.length)handleFile(e.target.files[0])});
+function handleFile(file){const maxSize=500*1024*1024;if(file.size>maxSize){showError('File too large. Max 500MB.');return}selectedFile=file;filename.textContent=file.name;filesize.textContent=formatSize(file.size);fileSelected.style.display='block';uploadZone.style.display='none';processBtn.disabled=false;error.style.display='none'}
+function formatSize(bytes){if(bytes<1024)return bytes+' B';if(bytes<1024*1024)return(bytes/1024).toFixed(1)+' KB';if(bytes<1024*1024*1024)return(bytes/(1024*1024)).toFixed(1)+' MB';return(bytes/(1024*1024*1024)).toFixed(1)+' GB'}
+function showError(msg){error.textContent=msg;error.style.display='block'}
+processBtn.addEventListener('click',async()=>{if(!selectedFile)return;processBtn.disabled=true;progress.style.display='block';error.style.display='none';const formData=new FormData();formData.append('file',selectedFile);formData.append('num_reels',document.getElementById('numReels').value);formData.append('language',document.getElementById('language').value);try{progressFill.style.width='20%';progressText.textContent='Uploading video...';const response=await fetch('/api/upload',{method:'POST',body:formData});progressFill.style.width='50%';progressText.textContent='AI analyzing video...';const data=await response.json();if(!response.ok)throw new Error(data.detail||'Upload error');const jobId=data.job_id;const checkInterval=setInterval(async()=>{const statusRes=await fetch('/api/status/'+jobId);const status=await statusRes.json();if(status.status==='completed'){clearInterval(checkInterval);progressFill.style.width='100%';progressText.textContent='Done! Redirecting...';setTimeout(()=>window.location.href='/result/'+jobId,1000)}else if(status.status==='failed'){clearInterval(checkInterval);showError('Processing error: '+(status.error||'Unknown error'));processBtn.disabled=false}else{progressFill.style.width='75%';progressText.textContent='Creating Reels...'}},3000)}catch(err){showError(err.message);processBtn.disabled=false;progress.style.display='none'}});
+</script>
+</body>
+</html>
