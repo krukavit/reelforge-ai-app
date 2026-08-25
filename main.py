@@ -1,6 +1,5 @@
 import os
 from flask import Flask, request, render_template_string
-from openai import OpenAI
 
 
 app = Flask(__name__)
@@ -11,6 +10,7 @@ _openai_client = None
 def get_openai_client():
     global _openai_client
     if _openai_client is None:
+        from openai import OpenAI
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
