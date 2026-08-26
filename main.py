@@ -9,7 +9,14 @@ import threading
 import time
 from flask import Flask, request, render_template_string, send_from_directory
 
+from access_middleware import check_access
 app = Flask(__name__)
+
+@app.before_request
+def require_access():
+    response = check_access()
+    if response:
+        return response
 
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
