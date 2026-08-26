@@ -78,7 +78,7 @@ def generate():
     try:
         client = get_groq_client()
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": "Ты — эксперт по созданию вирусных сценариев для Instagram Reels. Пиши коротко, с хуком, с призывом к действию. Используй эмодзи."},
                 {"role": "user", "content": f"Напиши сценарий для Reels на тему: {topic}"}
