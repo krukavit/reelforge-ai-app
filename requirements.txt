@@ -1,9 +1,10 @@
 fastapi
-uvicorn
-python-multipart
+flask
+groq
+gunicorn
 jinja2
 openai
+python-multipart
 requests
+uvicorn
 yt-dlp
-gunicorn
-flask
