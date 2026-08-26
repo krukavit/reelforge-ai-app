@@ -4,18 +4,18 @@ from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# Ленивая инициализация клиента OpenAI
-_openai_client = None
+# Ленивая инициализация клиента Groq
+_groq_client = None
 
-def get_openai_client():
-    global _openai_client
-    if _openai_client is None:
-        from openai import OpenAI
-        api_key = os.getenv("OPENAI_API_KEY")
+def get_groq_client():
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+        api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
-        _openai_client = OpenAI(api_key=api_key)
-    return _openai_client
+            raise ValueError("GROQ_API_KEY environment variable is not set")
+        _groq_client = Groq(api_key=api_key)
+    return _groq_client
 
 # HTML-шаблон главной страницы
 INDEX_HTML = """
@@ -76,7 +76,7 @@ def generate():
         return "Введи тему!", 400
 
     try:
-        client = get_openai_client()
+        client = get_groq_client()
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
