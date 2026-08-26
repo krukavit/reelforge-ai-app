@@ -1,7 +1,10 @@
 import os
+import re
+import json
 import subprocess
 import uuid
 import glob
+import shutil
 from flask import Flask, request, render_template_string, send_from_directory
 
 app = Flask(__name__)
@@ -12,6 +15,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 _groq_client = None
+_font_path = None
 
 def get_groq_client():
     global _groq_client
@@ -23,6 +27,24 @@ def get_groq_client():
         _groq_client = Groq(api_key=api_key)
     return _groq_client
 
+def get_font_path():
+    global _font_path
+    if _font_path is not None:
+        return _font_path
+    try:
+        result = subprocess.run(
+            ["fc-match", "-f", "%{file}", "DejaVu Sans"],
+            capture_output=True, text=True, timeout=5
+        )
+        path = result.stdout.strip()
+        if path and os.path.exists(path):
+            _font_path = path
+            return _font_path
+    except Exception:
+        pass
+    _font_path = ""
+    return _font_path
+
 INDEX_HTML = """
 <!DOCTYPE html>
 <html>
@@ -33,8 +55,9 @@ INDEX_HTML = """
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
         h1 { color: #333; }
         textarea { width: 100%; height: 120px; padding: 10px; font-size: 16px; }
-        input[type=file] { margin-top: 10px; }
-        button { background: #007bff; color: white; padding: 12px 24px; border: none; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        input[type=file] { margin-top: 10px; display: block; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        button { background: #007bff; color: white; padding: 12px 24px; border: none; cursor: pointer; font-size: 16px; margin-top: 15px; }
         button:hover { background: #0056b3; }
         hr { margin: 30px 0; }
     </style>
@@ -50,10 +73,17 @@ INDEX_HTML = """
 
     <hr>
 
-    <p>Собери видео Reels из своих скриншотов</p>
+    <p>Собери видео Reels из своих скриншотов (с субтитрами и музыкой)</p>
     <form action="/create_video" method="post" enctype="multipart/form-data">
-        <textarea name="topic" placeholder="Тема ролика (для сценария)..."></textarea><br>
-        <input type="file" name="images" multiple accept="image/*"><br>
+        <label>Тема ролика (для сценария и субтитров)</label>
+        <textarea name="topic" placeholder="Тема ролика..."></textarea>
+
+        <label>Скриншоты (можно несколько)</label>
+        <input type="file" name="images" multiple accept="image/*">
+
+        <label>Музыка (необязательно, mp3/wav)</label>
+        <input type="file" name="music" accept="audio/*">
+
         <button type="submit">Собрать видео</button>
     </form>
 </body>
@@ -100,7 +130,37 @@ def generate_script(topic):
     )
     return response.choices[0].message.content
 
-def build_slideshow_video(image_dir, output_path, seconds_per_image=3):
+def generate_captions(topic, count):
+    client = get_groq_client()
+    try:
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {"role": "system", "content": "Ты пишешь короткие субтитры для видео Reels. Отвечай ТОЛЬКО валидным JSON-массивом строк, без пояснений и markdown."},
+                {"role": "user", "content": f"Дай ровно {count} коротких фраз (до 6 слов каждая) как субтитры для видео на тему: {topic}. Формат: [\"фраза1\", \"фраза2\", ...]"}
+            ],
+            max_tokens=400
+        )
+        text = response.choices[0].message.content.strip()
+        text = re.sub(r"^```(json)?", "", text).strip()
+        text = re.sub(r"```$", "", text).strip()
+        captions = json.loads(text)
+        if isinstance(captions, list) and len(captions) > 0:
+            while len(captions) < count:
+                captions.append(captions[-1])
+            return [str(c) for c in captions[:count]]
+    except Exception:
+        pass
+    return [topic[:40] if topic else ""] * count
+
+def escape_drawtext(text):
+    text = text.replace("\\", "\\\\")
+    text = text.replace(":", "\\:")
+    text = text.replace("'", "\u2019")
+    text = text.replace("%", "\\%")
+    return text
+
+def build_slideshow_video(image_dir, output_path, captions=None, seconds_per_image=3):
     images = sorted(glob.glob(os.path.join(image_dir, "img*")))
     if not images:
         raise ValueError("Нет изображений для сборки видео")
@@ -112,13 +172,42 @@ def build_slideshow_video(image_dir, output_path, seconds_per_image=3):
             f.write(f"duration {seconds_per_image}\n")
         f.write(f"file '{images[-1]}'\n")
 
+    vf_chain = "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
+
+    font_path = get_font_path()
+    if captions and font_path:
+        for i, cap in enumerate(captions):
+            start = i * seconds_per_image
+            end = start + seconds_per_image
+            safe_cap = escape_drawtext(cap)
+            vf_chain += (
+                f",drawtext=fontfile='{font_path}':text='{safe_cap}':"
+                f"fontsize=42:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=12:"
+                f"x=(w-text_w)/2:y=h-220:enable='between(t,{start},{end})'"
+            )
+
     cmd = [
         "ffmpeg", "-y",
         "-f", "concat", "-safe", "0", "-i", list_path,
-        "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+        "-vf", vf_chain,
         "-r", "24",
         "-preset", "ultrafast",
         "-threads", "1",
+        output_path
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
+
+def mux_music(video_path, music_path, output_path):
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-stream_loop", "-1", "-i", music_path,
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", "128k",
+        "-shortest",
         output_path
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -145,6 +234,7 @@ def create_video():
     topic = request.form.get("topic", "")
     files = request.files.getlist("images")
     files = [f for f in files if f and f.filename]
+    music_file = request.files.get("music")
 
     if not files:
         return "Загрузи хотя бы одно изображение!", 400
@@ -157,22 +247,44 @@ def create_video():
         ext = os.path.splitext(f.filename)[1] or ".jpg"
         f.save(os.path.join(job_dir, f"img{i:03d}{ext}"))
 
+    music_path = None
+    if music_file and music_file.filename:
+        m_ext = os.path.splitext(music_file.filename)[1] or ".mp3"
+        music_path = os.path.join(job_dir, f"music{m_ext}")
+        music_file.save(music_path)
+
     script = None
+    captions = None
     if topic:
         try:
             script = generate_script(topic)
         except Exception as e:
             script = f"(Не удалось сгенерировать сценарий: {e})"
+        try:
+            captions = generate_captions(topic, len(files))
+        except Exception:
+            captions = None
 
-    output_filename = f"{job_id}.mp4"
-    output_path = os.path.join(OUTPUT_DIR, output_filename)
+    silent_filename = f"{job_id}_silent.mp4"
+    silent_path = os.path.join(OUTPUT_DIR, silent_filename)
 
     try:
-        build_slideshow_video(job_dir, output_path, seconds_per_image=3)
+        build_slideshow_video(job_dir, silent_path, captions=captions, seconds_per_image=3)
     except Exception as e:
         return f"Ошибка сборки видео: {str(e)}", 500
 
-    video_url = f"/outputs/{output_filename}"
+    final_filename = f"{job_id}.mp4"
+    final_path = os.path.join(OUTPUT_DIR, final_filename)
+
+    if music_path:
+        try:
+            mux_music(silent_path, music_path, final_path)
+        except Exception as e:
+            shutil.copy(silent_path, final_path)
+    else:
+        shutil.copy(silent_path, final_path)
+
+    video_url = f"/outputs/{final_filename}"
     return render_template_string(RESULT_HTML, script=script, video_url=video_url)
 
 @app.route("/outputs/<path:filename>")
