@@ -115,13 +115,15 @@ def build_slideshow_video(image_dir, output_path, seconds_per_image=3):
     cmd = [
         "ffmpeg", "-y",
         "-f", "concat", "-safe", "0", "-i", list_path,
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-        "-r", "30",
+        "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+        "-r", "24",
+        "-preset", "ultrafast",
+        "-threads", "1",
         output_path
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr[-1500:])
+        raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
 
 @app.route("/")
 def index():
