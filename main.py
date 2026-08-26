@@ -92,7 +92,6 @@ def generate():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    print(f"DEBUG: PORT env = {os.environ.get('PORT', 'NOT SET')}")
     app.run(host='0.0.0.0', port=port, debug=False)
 
 @app.route("/health")
