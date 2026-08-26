@@ -119,7 +119,9 @@ def build_slideshow_video(image_dir, output_path, seconds_per_image=3):
         "-r", "30",
         output_path
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr[-1500:])
 
 @app.route("/")
 def index():
