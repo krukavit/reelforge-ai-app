@@ -5,6 +5,8 @@ import subprocess
 import uuid
 import glob
 import shutil
+import threading
+import time
 from flask import Flask, request, render_template_string, send_from_directory
 
 app = Flask(__name__)
@@ -16,6 +18,18 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 _groq_client = None
 _font_path = None
+
+JOBS = {}
+JOBS_LOCK = threading.Lock()
+
+def set_job(job_id, **kwargs):
+    with JOBS_LOCK:
+        JOBS.setdefault(job_id, {})
+        JOBS[job_id].update(kwargs)
+
+def get_job(job_id):
+    with JOBS_LOCK:
+        return dict(JOBS.get(job_id, {}))
 
 def get_groq_client():
     global _groq_client
@@ -130,6 +144,39 @@ RESULT_HTML = """
     <a href="{{ video_url }}" download>⬇ Скачать видео</a><br>
     {% endif %}
     <a href="/">← Сгенерировать ещё</a>
+</body>
+</html>
+"""
+
+PROCESSING_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="4">
+    <title>ReelForge AI — Обработка</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
+        .spinner { font-size: 48px; }
+        p { color: #555; }
+    </style>
+</head>
+<body>
+    <div class="spinner">⏳</div>
+    <h2>Собираю видео...</h2>
+    <p>Это может занять минуту-две. Страница обновится автоматически.</p>
+</body>
+</html>
+"""
+
+ERROR_HTML = """
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Ошибка</title></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+    <h2>Ошибка сборки видео</h2>
+    <pre style="white-space: pre-wrap; background:#fee; padding:15px; border-radius:8px;">{{ error }}</pre>
+    <a href="/">← Назад</a>
 </body>
 </html>
 """
@@ -257,13 +304,11 @@ def extract_auto_clip(src_path, out_path, clip_seconds=4):
 def build_reel_from_videos(video_paths, output_path, captions=None):
     clip_dir = os.path.dirname(output_path)
     clip_paths = []
-    clip_durations = []
 
     for i, vp in enumerate(video_paths):
         clip_path = os.path.join(clip_dir, f"clip{i:03d}.mp4")
-        length = extract_auto_clip(vp, clip_path, clip_seconds=4)
+        extract_auto_clip(vp, clip_path, clip_seconds=4)
         clip_paths.append(clip_path)
-        clip_durations.append(length)
 
     font_path = get_font_path()
     if captions and font_path:
@@ -326,6 +371,40 @@ def mux_music(video_path, music_path, output_path):
     if result.returncode != 0:
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
 
+def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
+    try:
+        script = None
+        captions = None
+        if topic:
+            try:
+                script = generate_script(topic)
+            except Exception as e:
+                script = f"(Не удалось сгенерировать сценарий: {e})"
+            try:
+                captions = generate_captions(topic, len(files_meta))
+            except Exception:
+                captions = None
+
+        silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
+
+        if mode == "images":
+            build_slideshow_video(job_dir, silent_path, captions=captions, seconds_per_image=3)
+        else:
+            build_reel_from_videos(files_meta, silent_path, captions=captions)
+
+        final_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
+        if music_path:
+            try:
+                mux_music(silent_path, music_path, final_path)
+            except Exception:
+                shutil.copy(silent_path, final_path)
+        else:
+            shutil.copy(silent_path, final_path)
+
+        set_job(job_id, status="done", script=script, video_url=f"/outputs/{job_id}.mp4")
+    except Exception as e:
+        set_job(job_id, status="error", error=str(e))
+
 @app.route("/")
 def index():
     return render_template_string(INDEX_HTML)
@@ -365,39 +444,12 @@ def create_video():
         music_path = os.path.join(job_dir, f"music{m_ext}")
         music_file.save(music_path)
 
-    script = None
-    captions = None
-    if topic:
-        try:
-            script = generate_script(topic)
-        except Exception as e:
-            script = f"(Не удалось сгенерировать сценарий: {e})"
-        try:
-            captions = generate_captions(topic, len(files))
-        except Exception:
-            captions = None
+    set_job(job_id, status="processing")
+    t = threading.Thread(target=process_video_job, args=(job_id, job_dir, files, music_path, topic, "images"))
+    t.daemon = True
+    t.start()
 
-    silent_filename = f"{job_id}_silent.mp4"
-    silent_path = os.path.join(OUTPUT_DIR, silent_filename)
-
-    try:
-        build_slideshow_video(job_dir, silent_path, captions=captions, seconds_per_image=3)
-    except Exception as e:
-        return f"Ошибка сборки видео: {str(e)}", 500
-
-    final_filename = f"{job_id}.mp4"
-    final_path = os.path.join(OUTPUT_DIR, final_filename)
-
-    if music_path:
-        try:
-            mux_music(silent_path, music_path, final_path)
-        except Exception:
-            shutil.copy(silent_path, final_path)
-    else:
-        shutil.copy(silent_path, final_path)
-
-    video_url = f"/outputs/{final_filename}"
-    return render_template_string(RESULT_HTML, script=script, video_url=video_url)
+    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url=/status/{job_id}"></body>'))
 
 @app.route("/create_reel_from_videos", methods=["POST"])
 def create_reel_from_videos():
@@ -426,39 +478,26 @@ def create_reel_from_videos():
         music_path = os.path.join(job_dir, f"music{m_ext}")
         music_file.save(music_path)
 
-    script = None
-    captions = None
-    if topic:
-        try:
-            script = generate_script(topic)
-        except Exception as e:
-            script = f"(Не удалось сгенерировать сценарий: {e})"
-        try:
-            captions = generate_captions(topic, len(files))
-        except Exception:
-            captions = None
+    set_job(job_id, status="processing")
+    t = threading.Thread(target=process_video_job, args=(job_id, job_dir, video_paths, music_path, topic, "videos"))
+    t.daemon = True
+    t.start()
 
-    silent_filename = f"{job_id}_silent.mp4"
-    silent_path = os.path.join(OUTPUT_DIR, silent_filename)
+    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url=/status/{job_id}"></body>'))
 
-    try:
-        build_reel_from_videos(video_paths, silent_path, captions=captions)
-    except Exception as e:
-        return f"Ошибка сборки видео: {str(e)}", 500
+@app.route("/status/<job_id>")
+def status(job_id):
+    job = get_job(job_id)
+    if not job:
+        return "Задача не найдена (возможно, сервер перезапустился)", 404
 
-    final_filename = f"{job_id}.mp4"
-    final_path = os.path.join(OUTPUT_DIR, final_filename)
-
-    if music_path:
-        try:
-            mux_music(silent_path, music_path, final_path)
-        except Exception:
-            shutil.copy(silent_path, final_path)
-    else:
-        shutil.copy(silent_path, final_path)
-
-    video_url = f"/outputs/{final_filename}"
-    return render_template_string(RESULT_HTML, script=script, video_url=video_url)
+    if job.get("status") == "processing":
+        return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url=/status/{job_id}"></body>'))
+    elif job.get("status") == "error":
+        return render_template_string(ERROR_HTML, error=job.get("error", "неизвестная ошибка"))
+    elif job.get("status") == "done":
+        return render_template_string(RESULT_HTML, script=job.get("script"), video_url=job.get("video_url"))
+    return "Неизвестный статус задачи", 500
 
 @app.route("/outputs/<path:filename>")
 def outputs(filename):
@@ -471,4 +510,3 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
-# rebuild trigger
