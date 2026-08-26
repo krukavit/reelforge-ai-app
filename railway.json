@@ -1,9 +1,9 @@
-{
+){
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python main.py"
+    "startCommand": "gunicorn main:app --bind 0.0.0.0:$PORT"
   }
 }
