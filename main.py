@@ -8,7 +8,7 @@ import shutil
 import threading
 import time
 import psycopg
-from flask import Flask, request, render_template_string, send_from_directory, redirect
+from flask import Flask, request, render_template_string, send_from_directory, redirect, jsonify
 
 from access_middleware import check_access, set_access_cookie
 
@@ -467,7 +467,7 @@ input[type=file]::file-selector-button{
     <h2>🎥 Reels из видео</h2>
     <p class="card-desc">Загрузи несколько видео — система сама выберет лучшие моменты и соберёт ролик.</p>
 
-    <form action="/create_reel_from_videos" method="post" enctype="multipart/form-data">
+    <form id="videoUploadForm" action="/create_reel_from_videos" method="post" enctype="multipart/form-data">
 
         <label>🎯 Тема ролика</label>
         <textarea name="topic" placeholder="Например: Обзор продукта за 30 секунд"></textarea>
@@ -511,42 +511,167 @@ input[type=file]::file-selector-button{
 </div>
 
 <script>
-document.querySelectorAll("form").forEach(form=>{
-    form.addEventListener("submit",()=>{
-        const btn=form.querySelector("button");
-        if(btn){
-            btn.disabled=true;
-            btn.innerHTML="⏳ Создаём видео...";
+function showLoading() {
+    const loading = document.getElementById("loading");
+    if (loading) loading.style.display = "flex";
+
+    let seconds = 0;
+    const timer = document.getElementById("timer");
+    const status = document.getElementById("statusText");
+
+    setInterval(() => {
+        seconds++;
+        const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+        const sec = String(seconds % 60).padStart(2, "0");
+        if (timer) timer.textContent = m + ":" + sec;
+    }, 1000);
+
+    const messages = [
+        ["s1", "Загружаем материалы..."],
+        ["s2", "Анализируем контент..."],
+        ["s3", "Создаём сценарий..."],
+        ["s4", "Монтируем видео..."],
+        ["s5", "Финальный рендер..."]
+    ];
+
+    messages.forEach((item, i) => {
+        setTimeout(() => {
+            document.querySelectorAll(".step").forEach(x => x.classList.remove("active"));
+            const step = document.getElementById(item[0]);
+            if (step) step.classList.add("active");
+            if (status) status.textContent = item[1];
+        }, (i + 1) * 5000);
+    });
+}
+
+async function uploadVideoForm(form) {
+    const btn = form.querySelector("button");
+    const filesInput = form.querySelector('input[name="videos"]');
+    const topicInput = form.querySelector('textarea[name="topic"]');
+    const musicInput = form.querySelector('input[name="music"]');
+
+    const files = Array.from(filesInput.files || []);
+
+    if (!files.length) {
+        alert("Выбери хотя бы одно видео!");
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "⏳ Загружаем видео...";
+    }
+
+    showLoading();
+
+    try {
+        // Создаём сессию загрузки
+        const startData = new URLSearchParams();
+        startData.append("topic", topicInput ? topicInput.value : "");
+        startData.append("total", String(files.length));
+
+        const startResponse = await fetch("/start_video_upload", {
+            method: "POST",
+            body: startData
+        });
+
+        if (!startResponse.ok) {
+            throw new Error("Не удалось начать загрузку");
         }
 
-        document.getElementById("loading").style.display="flex";
+        const startResult = await startResponse.json();
+        const jobId = startResult.job_id;
 
-        let seconds=0;
-        const timer=document.getElementById("timer");
-        const status=document.getElementById("statusText");
+        // Загружаем КАЖДОЕ видео отдельным HTTP-запросом
+        for (let i = 0; i < files.length; i++) {
+            if (btn) btn.innerHTML = `⏳ Загружаем видео ${i + 1} из ${files.length}...`;
 
-        setInterval(()=>{
-            seconds++;
-            const m=String(Math.floor(seconds/60)).padStart(2,"0");
-            const s=String(seconds%60).padStart(2,"0");
-            timer.textContent=m+":"+s;
-        },1000);
+            const fd = new FormData();
+            fd.append("job_id", jobId);
+            fd.append("index", String(i));
+            fd.append("video", files[i], files[i].name);
 
-        const messages=[
-            ["s1","Загружаем материалы..."],
-            ["s2","Анализируем контент..."],
-            ["s3","Создаём сценарий..."],
-            ["s4","Монтируем видео..."],
-            ["s5","Финальный рендер..."]
-        ];
+            const response = await fetch("/upload_video_part", {
+                method: "POST",
+                body: fd
+            });
 
-        messages.forEach((item,i)=>{
-            setTimeout(()=>{
-                document.querySelectorAll(".step").forEach(x=>x.classList.remove("active"));
-                document.getElementById(item[0]).classList.add("active");
-                status.textContent=item[1];
-            },(i+1)*5000);
+            if (!response.ok) {
+                let message = "Ошибка загрузки видео " + (i + 1);
+                try {
+                    const data = await response.json();
+                    if (data.error) message = data.error;
+                } catch (_) {}
+                throw new Error(message);
+            }
+        }
+
+        // Музыка тоже загружается отдельным запросом
+        if (musicInput && musicInput.files && musicInput.files.length) {
+            if (btn) btn.innerHTML = "⏳ Загружаем музыку...";
+
+            const musicFd = new FormData();
+            musicFd.append("job_id", jobId);
+            musicFd.append("music", musicInput.files[0], musicInput.files[0].name);
+
+            const musicResponse = await fetch("/upload_video_music", {
+                method: "POST",
+                body: musicFd
+            });
+
+            if (!musicResponse.ok) {
+                throw new Error("Не удалось загрузить музыку");
+            }
+        }
+
+        // После полной загрузки запускаем уже существующий рендер
+        if (btn) btn.innerHTML = "🎬 Запускаем монтаж...";
+
+        const finishData = new URLSearchParams();
+        finishData.append("job_id", jobId);
+
+        const finishResponse = await fetch("/finish_video_upload", {
+            method: "POST",
+            body: finishData
         });
+
+        if (!finishResponse.ok) {
+            let message = "Не удалось запустить обработку";
+            try {
+                const data = await finishResponse.json();
+                if (data.error) message = data.error;
+            } catch (_) {}
+            throw new Error(message);
+        }
+
+        window.location.href =
+            "/status/" + jobId + "?access=rf2026free";
+
+    } catch (error) {
+        console.error(error);
+        alert("Ошибка загрузки: " + error.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = "🚀 Собрать Reels из видео";
+        }
+    }
+}
+
+document.querySelectorAll("form").forEach(form => {
+    form.addEventListener("submit", event => {
+        if (form.id === "videoUploadForm") {
+            event.preventDefault();
+            uploadVideoForm(form);
+            return;
+        }
+
+        const btn = form.querySelector("button");
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = "⏳ Создаём видео...";
+        }
+
+        showLoading();
     });
 });
 </script>
@@ -950,6 +1075,166 @@ def create_video():
     t.start()
 
     return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
+
+
+@app.route("/start_video_upload", methods=["POST"])
+def start_video_upload():
+    topic = request.form.get("topic", "")
+    try:
+        total = int(request.form.get("total", "0"))
+    except Exception:
+        total = 0
+
+    if total <= 0:
+        return jsonify({"error": "Нет видео для загрузки"}), 400
+
+    job_id = uuid.uuid4().hex
+    job_dir = os.path.join(UPLOAD_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    set_job(
+        job_id,
+        status="uploading",
+        topic=topic,
+        total=total,
+        video_paths=[]
+    )
+
+    print(
+        f"[UPLOAD-SESSION] START job={job_id} total={total}",
+        flush=True
+    )
+
+    return jsonify({"job_id": job_id})
+
+
+@app.route("/upload_video_part", methods=["POST"])
+def upload_video_part():
+    job_id = request.form.get("job_id", "")
+    video = request.files.get("video")
+
+    if not job_id or not video or not video.filename:
+        return jsonify({"error": "Видео не получено"}), 400
+
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "Задача не найдена"}), 404
+
+    try:
+        index = int(request.form.get("index", "0"))
+    except Exception:
+        index = 0
+
+    job_dir = os.path.join(UPLOAD_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    ext = os.path.splitext(video.filename)[1] or ".mp4"
+    video_path = os.path.join(job_dir, f"src{index:03d}{ext}")
+
+    started = time.time()
+    print(
+        f"[UPLOAD-PART] START job={job_id} index={index} "
+        f"name={video.filename} content_length={request.content_length}",
+        flush=True
+    )
+
+    video.save(video_path)
+
+    size = os.path.getsize(video_path)
+
+    with JOBS_LOCK:
+        current = JOBS.setdefault(job_id, {})
+        paths = current.setdefault("video_paths", [])
+        paths = [x for x in paths if x != video_path]
+        paths.append(video_path)
+        paths.sort()
+        current["video_paths"] = paths
+
+    print(
+        f"[UPLOAD-PART] SAVED job={job_id} index={index} "
+        f"size={size} elapsed={time.time()-started:.2f}s",
+        flush=True
+    )
+
+    return jsonify({
+        "ok": True,
+        "index": index,
+        "size": size
+    })
+
+
+@app.route("/upload_video_music", methods=["POST"])
+def upload_video_music():
+    job_id = request.form.get("job_id", "")
+    music = request.files.get("music")
+
+    if not job_id:
+        return jsonify({"error": "Нет job_id"}), 400
+
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "Задача не найдена"}), 404
+
+    if not music or not music.filename:
+        return jsonify({"ok": True, "skipped": True})
+
+    job_dir = os.path.join(UPLOAD_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    ext = os.path.splitext(music.filename)[1] or ".mp3"
+    music_path = os.path.join(job_dir, f"music{ext}")
+
+    music.save(music_path)
+
+    set_job(job_id, music_path=music_path)
+
+    print(
+        f"[UPLOAD-MUSIC] SAVED job={job_id} "
+        f"size={os.path.getsize(music_path)}",
+        flush=True
+    )
+
+    return jsonify({"ok": True})
+
+
+@app.route("/finish_video_upload", methods=["POST"])
+def finish_video_upload():
+    job_id = request.form.get("job_id", "")
+
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "Задача не найдена"}), 404
+
+    video_paths = list(job.get("video_paths", []))
+    total = int(job.get("total", 0))
+
+    if len(video_paths) != total:
+        return jsonify({
+            "error": f"Загружено {len(video_paths)} из {total} видео"
+        }), 400
+
+    topic = job.get("topic", "")
+    music_path = job.get("music_path")
+
+    print(
+        f"[UPLOAD-SESSION] COMPLETE job={job_id} "
+        f"files={len(video_paths)} "
+        f"total_bytes={sum(os.path.getsize(v) for v in video_paths)}",
+        flush=True
+    )
+
+    set_job(job_id, status="processing")
+
+    t = threading.Thread(
+        target=process_video_job,
+        args=(job_id, os.path.join(UPLOAD_DIR, job_id),
+              video_paths, music_path, topic, "videos")
+    )
+    t.daemon = True
+    t.start()
+
+    return jsonify({"ok": True, "job_id": job_id})
+
 
 @app.route("/create_reel_from_videos", methods=["POST"])
 def create_reel_from_videos():
