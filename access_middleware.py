@@ -1,4 +1,4 @@
-from flask import request, redirect, make_response
+from flask import request, redirect
 import os
 
 LANDING_URL = os.environ.get(
@@ -16,8 +16,12 @@ MAX_FREE_ENTRIES = 3
 
 def check_access():
     """
-    Разрешает первые 3 входа по access-токену.
-    После 3 входов отправляет пользователя на страницу оплаты.
+    Бесплатный доступ: 3 входа.
+    Счётчик увеличивается только при входе на главную /
+    с правильным access-токеном.
+
+    Запросы /status, /generate, /create_video,
+    /create_reel_from_videos и /outputs/* не расходуют вход.
     """
 
     if request.path == "/health":
@@ -35,13 +39,22 @@ def check_access():
         count = 0
 
     token = request.args.get("access")
+    has_cookie = request.cookies.get(COOKIE_NAME) == ACCESS_TOKEN
 
+    # Вход по правильной ссылке.
+    # Только "/" с access считается новым бесплатным входом.
     if token == ACCESS_TOKEN:
-        if count < MAX_FREE_ENTRIES:
-            return None
-        return redirect("/payment", code=302)
+        if request.path == "/":
+            if count < MAX_FREE_ENTRIES:
+                return None
+            return redirect("/payment", code=302)
 
-    if request.cookies.get(COOKIE_NAME) == ACCESS_TOKEN:
+        # access-токен на внутренних URL разрешаем,
+        # но НЕ увеличиваем счётчик.
+        return None
+
+    # Уже авторизованный пользователь.
+    if has_cookie:
         if count < MAX_FREE_ENTRIES:
             return None
         return redirect("/payment", code=302)
@@ -51,20 +64,20 @@ def check_access():
 
 def set_access_cookie(response):
     """
-    Сохраняет access cookie и увеличивает счётчик входов.
+    Ставит cookie и увеличивает счётчик ТОЛЬКО при
+    настоящем входе на главную страницу с access-токеном.
     """
 
     token = request.args.get("access")
 
-    # Новый вход по правильному токену
-    if token == ACCESS_TOKEN:
+    # Считаем только /?access=rf2026free
+    if token == ACCESS_TOKEN and request.path == "/":
 
         try:
             count = int(request.cookies.get(COUNT_COOKIE_NAME, "0"))
         except (TypeError, ValueError):
             count = 0
 
-        # Увеличиваем счётчик только до максимума
         new_count = min(count + 1, MAX_FREE_ENTRIES)
 
         response.set_cookie(
