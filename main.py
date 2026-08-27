@@ -953,10 +953,15 @@ def create_video():
 
 @app.route("/create_reel_from_videos", methods=["POST"])
 def create_reel_from_videos():
+    upload_started = time.time()
+    print(f"[UPLOAD] START content_length={request.content_length}", flush=True)
+
     topic = request.form.get("topic", "")
     files = request.files.getlist("videos")
     files = [f for f in files if f and f.filename]
     music_file = request.files.get("music")
+
+    print(f"[UPLOAD] PARSED files={len(files)} elapsed={time.time()-upload_started:.2f}s", flush=True)
 
     if not files:
         return "Загрузи хотя бы одно видео!", 400
@@ -971,12 +976,24 @@ def create_reel_from_videos():
         vp = os.path.join(job_dir, f"src{i:03d}{ext}")
         f.save(vp)
         video_paths.append(vp)
+        print(
+            f"[UPLOAD] SAVED file={i} name={f.filename} "
+            f"size={os.path.getsize(vp)} bytes elapsed={time.time()-upload_started:.2f}s",
+            flush=True
+        )
 
     music_path = None
     if music_file and music_file.filename:
         m_ext = os.path.splitext(music_file.filename)[1] or ".mp3"
         music_path = os.path.join(job_dir, f"music{m_ext}")
         music_file.save(music_path)
+
+    print(
+        f"[UPLOAD] COMPLETE job={job_id} files={len(video_paths)} "
+        f"total_bytes={sum(os.path.getsize(v) for v in video_paths)} "
+        f"elapsed={time.time()-upload_started:.2f}s",
+        flush=True
+    )
 
     set_job(job_id, status="processing")
     t = threading.Thread(target=process_video_job, args=(job_id, job_dir, video_paths, music_path, topic, "videos"))
