@@ -12,6 +12,11 @@ from flask import Flask, request, render_template_string, send_from_directory
 from access_middleware import check_access, set_access_cookie
 app = Flask(__name__)
 
+BACKEND_URL = os.environ.get(
+    "BACKEND_URL",
+    "https://web-production-3e349.up.railway.app"
+)
+
 @app.before_request
 def require_access():
     response = check_access()
@@ -644,7 +649,7 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
         else:
             shutil.copy(silent_path, final_path)
 
-        set_job(job_id, status="done", script=script, video_url=f"/outputs/{job_id}.mp4")
+        set_job(job_id, status="done", script=script, video_url=f"{BACKEND_URL}/outputs/{job_id}.mp4")
     except Exception as e:
         set_job(job_id, status="error", error=str(e))
 
@@ -692,7 +697,7 @@ def create_video():
     t.daemon = True
     t.start()
 
-    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url=/status/{job_id}"></body>'))
+    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
 
 @app.route("/create_reel_from_videos", methods=["POST"])
 def create_reel_from_videos():
@@ -726,7 +731,7 @@ def create_reel_from_videos():
     t.daemon = True
     t.start()
 
-    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url=/status/{job_id}"></body>'))
+    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
 
 @app.route("/status/<job_id>")
 def status(job_id):
@@ -735,7 +740,7 @@ def status(job_id):
         return "Задача не найдена (возможно, сервер перезапустился)", 404
 
     if job.get("status") == "processing":
-        return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url=/status/{job_id}"></body>'))
+        return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
     elif job.get("status") == "error":
         return render_template_string(ERROR_HTML, error=job.get("error", "неизвестная ошибка"))
     elif job.get("status") == "done":
