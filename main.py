@@ -733,27 +733,41 @@ def extract_auto_clip(src_path, out_path, clip_seconds=4):
     if duration <= 0:
         raise RuntimeError(f"Не удалось определить длительность видео: {src_path}")
 
-    if duration <= clip_seconds:
+    if duration < clip_seconds:
+        # Зацикливаем короткое видео до требуемой длительности.
         start = 0
-        length = duration
+        length = clip_seconds
+        cmd = [
+            "ffmpeg", "-y",
+            "-stream_loop", "-1",
+            "-i", src_path,
+            "-t", str(length),
+            "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+            "-r", "24",
+            "-an",
+            "-preset", "ultrafast",
+            "-threads", "1",
+            out_path
+        ]
     else:
         start = duration * 0.2
         if start + clip_seconds > duration:
             start = max(0, duration - clip_seconds)
         length = clip_seconds
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-ss", str(start),
-        "-i", src_path,
-        "-t", str(length),
-        "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-        "-r", "24",
-        "-an",
-        "-preset", "ultrafast",
-        "-threads", "1",
-        out_path
-    ]
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(start),
+            "-i", src_path,
+            "-t", str(length),
+            "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+            "-r", "24",
+            "-an",
+            "-preset", "ultrafast",
+            "-threads", "1",
+            out_path
+        ]
+
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
