@@ -513,6 +513,29 @@ def build_slideshow_video(image_dir, output_path, captions=None, seconds_per_ima
     if result.returncode != 0:
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
 
+def parse_target_duration(topic):
+    """Определяет длительность ролика из промпта. По умолчанию 40 секунд."""
+    text = (topic or "").lower().strip()
+
+    # MM:SS
+    m = re.search(r'\b(\d{1,2}):(\d{2})\b', text)
+    if m:
+        return max(5, min(int(m.group(1)) * 60 + int(m.group(2)), 180))
+
+    # минуты
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:минут(?:а|ы)?|мин\.?|m)\b', text)
+    if m:
+        seconds = float(m.group(1).replace(",", ".")) * 60
+        return max(5, min(int(round(seconds)), 180))
+
+    # секунды
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:секунд(?:а|ы)?|сек\.?|сек|s)\b', text)
+    if m:
+        return max(5, min(int(round(float(m.group(1).replace(",", ".")))), 180))
+
+    return 40
+
+
 def get_video_duration(path):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -552,13 +575,15 @@ def extract_auto_clip(src_path, out_path, clip_seconds=4):
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
     return length
 
-def build_reel_from_videos(video_paths, output_path, captions=None):
+def build_reel_from_videos(video_paths, output_path, captions=None, target_duration=40):
     clip_dir = os.path.dirname(output_path)
     clip_paths = []
 
+    clip_seconds = max(1, target_duration / max(1, len(video_paths)))
+
     for i, vp in enumerate(video_paths):
         clip_path = os.path.join(clip_dir, f"clip{i:03d}.mp4")
-        extract_auto_clip(vp, clip_path, clip_seconds=4)
+        extract_auto_clip(vp, clip_path, clip_seconds=clip_seconds)
         clip_paths.append(clip_path)
 
     font_path = get_font_path()
@@ -627,21 +652,42 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
         script = None
         captions = None
         if topic:
+            target_duration = parse_target_duration(topic)
+            ai_topic = (
+                f"{topic}\n\n"
+                f"ВАЖНО: создай сценарий для Reels примерно на "
+                f"{target_duration} секунд. "
+                f"Рассчитай текст и сцены под эту длительность."
+            )
+
             try:
-                script = generate_script(topic)
+                script = generate_script(ai_topic)
             except Exception as e:
                 script = f"(Не удалось сгенерировать сценарий: {e})"
             try:
-                captions = generate_captions(topic, len(files_meta))
+                captions = generate_captions(ai_topic, len(files_meta))
             except Exception:
                 captions = None
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
+        target_duration = parse_target_duration(topic)
+
         if mode == "images":
-            build_slideshow_video(job_dir, silent_path, captions=captions, seconds_per_image=3)
+            seconds_per_image = target_duration / max(1, len(files_meta))
+            build_slideshow_video(
+                job_dir,
+                silent_path,
+                captions=captions,
+                seconds_per_image=seconds_per_image
+            )
         else:
-            build_reel_from_videos(files_meta, silent_path, captions=captions)
+            build_reel_from_videos(
+                files_meta,
+                silent_path,
+                captions=captions,
+                target_duration=target_duration
+            )
 
         final_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
         if music_path:
