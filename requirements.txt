@@ -9,4 +9,4 @@ requests
 uvicorn
 yt-dlp
 
-psycopg[binary]>=3.2,<4
+psycopg==3.2.9
