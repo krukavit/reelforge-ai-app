@@ -746,6 +746,60 @@ def status(job_id):
 def outputs(filename):
     return send_from_directory(OUTPUT_DIR, filename)
 
+@app.route("/payment")
+def payment():
+    return """
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>ReelForge AI — Оплата</title>
+        <style>
+            body {
+                margin: 0;
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #07070d;
+                color: white;
+                font-family: Arial, sans-serif;
+                text-align: center;
+            }
+            .box {
+                padding: 40px 25px;
+                max-width: 420px;
+            }
+            h1 {
+                font-size: 32px;
+                margin-bottom: 15px;
+            }
+            p {
+                color: #9ca3af;
+                font-size: 17px;
+                line-height: 1.5;
+            }
+            .badge {
+                display: inline-block;
+                margin-bottom: 20px;
+                padding: 8px 14px;
+                border-radius: 999px;
+                background: #9333ea;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="box">
+            <div class="badge">ReelForge AI</div>
+            <h1>Бесплатные входы закончились 🎬</h1>
+            <p>Здесь позже будет страница оплаты.</p>
+        </div>
+    </body>
+    </html>
+    """
+
 @app.route("/health")
 def health():
     return "OK", 200
