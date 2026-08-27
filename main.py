@@ -832,6 +832,7 @@ def mux_music(video_path, music_path, output_path):
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
 
 def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
+    print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
     try:
         script = None
         captions = None
@@ -856,6 +857,8 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
         target_duration = parse_target_duration(topic)
+        print(f"[JOB {job_id}] target_duration={target_duration}", flush=True)
+        print(f"[JOB {job_id}] START RENDER mode={mode}", flush=True)
 
         if mode == "images":
             seconds_per_image = target_duration / max(1, len(files_meta))
@@ -873,12 +876,14 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
                 target_duration=target_duration
             )
 
+        print(f"[JOB {job_id}] RENDER COMPLETE silent={silent_path}", flush=True)
         final_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
         if music_path:
             mux_music(silent_path, music_path, final_path)
         else:
             shutil.copy(silent_path, final_path)
 
+        print(f"[JOB {job_id}] DONE final={final_path}", flush=True)
         set_job(job_id, status="done", script=script, video_url=f"{BACKEND_URL}/outputs/{job_id}.mp4")
     except Exception as e:
         import traceback
