@@ -881,6 +881,9 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
 
         set_job(job_id, status="done", script=script, video_url=f"{BACKEND_URL}/outputs/{job_id}.mp4")
     except Exception as e:
+        import traceback
+        print(f"VIDEO JOB ERROR [{job_id}]: {e}", flush=True)
+        traceback.print_exc()
         set_job(job_id, status="error", error=str(e))
 
 @app.route("/")
