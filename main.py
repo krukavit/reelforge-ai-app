@@ -405,10 +405,7 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
 
         final_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
         if music_path:
-            try:
-                mux_music(silent_path, music_path, final_path)
-            except Exception:
-                shutil.copy(silent_path, final_path)
+            mux_music(silent_path, music_path, final_path)
         else:
             shutil.copy(silent_path, final_path)
 
