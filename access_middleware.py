@@ -30,6 +30,16 @@ def check_access():
     if request.path.startswith("/outputs/"):
         return None
 
+    # Внутренние запросы пошаговой загрузки видео.
+    # Они не должны отправлять пользователя обратно на лендинг.
+    if request.path in (
+        "/start_video_upload",
+        "/upload_video_part",
+        "/upload_video_music",
+        "/finish_video_upload",
+    ):
+        return None
+
     if request.path == "/payment":
         return None
 
