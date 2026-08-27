@@ -7,7 +7,7 @@ import glob
 import shutil
 import threading
 import time
-from flask import Flask, request, render_template_string, send_from_directory
+from flask import Flask, request, render_template_string, send_from_directory, redirect
 
 from access_middleware import check_access, set_access_cookie
 app = Flask(__name__)
