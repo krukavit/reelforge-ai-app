@@ -72,61 +72,296 @@ def get_font_path():
 
 INDEX_HTML = """
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>ReelForge AI</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-        h1 { color: #333; }
-        textarea { width: 100%; height: 120px; padding: 10px; font-size: 16px; }
-        input[type=file] { margin-top: 10px; display: block; }
-        label { display: block; margin-top: 15px; font-weight: bold; }
-        button { background: #007bff; color: white; padding: 12px 24px; border: none; cursor: pointer; font-size: 16px; margin-top: 15px; }
-        button:hover { background: #0056b3; }
-        hr { margin: 30px 0; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReelForge AI — Создание Reels</title>
+
+<style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+    margin:0;
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+    background:
+      radial-gradient(circle at 10% 0%,rgba(168,85,247,.18),transparent 32%),
+      radial-gradient(circle at 90% 10%,rgba(236,72,153,.14),transparent 30%),
+      #07070d;
+    color:#fff;
+    min-height:100vh;
+}
+.container{max-width:900px;margin:auto;padding:20px}
+.header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 0 35px;
+}
+.logo{
+    font-size:25px;font-weight:900;
+    background:linear-gradient(90deg,#a855f7,#ec4899);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.badge{
+    padding:7px 12px;border-radius:999px;
+    background:rgba(168,85,247,.12);
+    border:1px solid rgba(168,85,247,.25);
+    color:#c084fc;font-size:12px;
+}
+.hero{text-align:center;padding:25px 0 35px}
+.hero h1{
+    font-size:clamp(38px,8vw,68px);
+    line-height:1.02;margin:0 0 18px;font-weight:900;
+}
+.gradient{
+    background:linear-gradient(90deg,#a855f7,#ec4899);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.hero p{color:#9ca3af;font-size:17px;line-height:1.6;max-width:650px;margin:0 auto}
+.free{
+    display:inline-block;margin-bottom:20px;padding:8px 15px;
+    border-radius:999px;background:rgba(168,85,247,.10);
+    border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:14px;
+}
+.card{
+    background:rgba(17,17,27,.82);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:24px;padding:25px;margin:18px 0;
+    box-shadow:0 20px 60px rgba(0,0,0,.28);
+    backdrop-filter:blur(14px);
+}
+.card h2{margin:0 0 8px;font-size:21px}
+.card-desc{margin:0 0 20px;color:#8b8f9b;font-size:14px;line-height:1.5}
+label{display:block;margin:18px 0 8px;font-weight:700;font-size:14px}
+textarea{
+    width:100%;min-height:105px;resize:vertical;
+    background:#0b0b13;color:#fff;border:1px solid #252533;
+    border-radius:14px;padding:15px;font-size:15px;outline:none;
+    transition:.2s;
+}
+textarea:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.12)}
+.file{
+    width:100%;padding:14px;border:1px dashed #39394a;
+    border-radius:14px;background:#0b0b13;color:#9ca3af;
+}
+input[type=file]::file-selector-button{
+    background:linear-gradient(90deg,#7c3aed,#db2777);
+    color:#fff;border:0;border-radius:9px;padding:9px 13px;
+    margin-right:10px;font-weight:700;
+}
+.btn{
+    width:100%;border:0;border-radius:14px;padding:15px;
+    margin-top:20px;color:white;font-size:16px;font-weight:800;
+    cursor:pointer;
+    background:linear-gradient(90deg,#9333ea,#ec4899);
+    box-shadow:0 10px 30px rgba(168,85,247,.22);
+    transition:.2s;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 14px 35px rgba(168,85,247,.3)}
+.btn:disabled{opacity:.65;cursor:wait;transform:none}
+.divider{height:1px;background:rgba(255,255,255,.07);margin:30px 0}
+.features{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:25px
+}
+.feature{
+    text-align:center;padding:16px 10px;border-radius:16px;
+    background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);
+}
+.feature b{display:block;font-size:18px;margin-bottom:5px}
+.feature span{color:#858997;font-size:12px}
+.footer{text-align:center;color:#555967;font-size:12px;padding:35px 0}
+
+.overlay{
+    display:none;position:fixed;inset:0;z-index:9999;
+    background:rgba(4,4,9,.94);backdrop-filter:blur(10px);
+    align-items:center;justify-content:center;padding:25px;
+}
+.loader-box{
+    width:min(440px,100%);text-align:center;
+    background:#11111b;border:1px solid #29293a;border-radius:26px;
+    padding:30px;box-shadow:0 25px 80px rgba(0,0,0,.55);
+}
+.spinner{
+    width:58px;height:58px;margin:0 auto 20px;
+    border:5px solid #29293a;border-top-color:#c026d3;
+    border-right-color:#9333ea;border-radius:50%;
+    animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-box h2{margin:0 0 8px}
+.loader-box p{color:#8b8f9b;margin:0 0 20px}
+.timer{font-size:28px;font-weight:900;margin:15px 0}
+.progress{
+    height:8px;background:#252533;border-radius:99px;overflow:hidden;margin:20px 0
+}
+.progress-bar{
+    width:15%;height:100%;
+    background:linear-gradient(90deg,#9333ea,#ec4899);
+    border-radius:99px;animation:progress 12s ease-in-out infinite;
+}
+@keyframes progress{
+    0%{width:10%}35%{width:38%}65%{width:67%}90%{width:88%}100%{width:94%}
+}
+.steps{text-align:left;margin-top:20px}
+.step{
+    display:flex;gap:10px;align-items:center;
+    color:#555967;padding:8px 0;font-size:14px;
+}
+.step.active{color:#fff}
+.dot{
+    width:9px;height:9px;border-radius:50%;background:#343444;flex:none
+}
+.step.active .dot{background:#c026d3;box-shadow:0 0 12px #c026d3}
+
+@media(max-width:600px){
+    .container{padding:14px}
+    .header{padding-bottom:20px}
+    .hero{padding:20px 0}
+    .hero h1{font-size:43px}
+    .hero p{font-size:15px}
+    .card{padding:19px;border-radius:20px}
+    .features{grid-template-columns:1fr}
+}
+</style>
 </head>
+
 <body>
-    <h1>ReelForge AI</h1>
 
-    <p>Введи тему — сгенерирую сценарий для Reels</p>
+<div class="container">
+
+<header class="header">
+    <div class="logo">ReelForge AI</div>
+    <div class="badge">⚡ AI VIDEO</div>
+</header>
+
+<section class="hero">
+    <div class="free">🚀 3 видео бесплатно — без карты</div>
+    <h1>Создавай <span class="gradient">Reels</span><br>за минуты</h1>
+    <p>Генерируй сценарии и собирай вертикальные видео для TikTok, Instagram Reels и YouTube Shorts.</p>
+
+    <div class="features">
+        <div class="feature"><b>🤖 AI</b><span>Умный сценарий</span></div>
+        <div class="feature"><b>🎬 9:16</b><span>Формат Reels</span></div>
+        <div class="feature"><b>⚡ Быстро</b><span>Автоматический монтаж</span></div>
+    </div>
+</section>
+
+<div class="card">
+    <h2>🧠 Сгенерировать сценарий</h2>
+    <p class="card-desc">Введи тему — AI подготовит готовый сценарий для короткого ролика.</p>
+
     <form action="/generate" method="post">
-        <textarea name="topic" placeholder="Например: 5 лайфхаков для продуктивности..."></textarea><br>
-        <button type="submit">Сгенерировать сценарий</button>
+        <textarea name="topic" placeholder="Например: 5 лайфхаков для продуктивности..."></textarea>
+        <button class="btn" type="submit">✨ Сгенерировать сценарий</button>
     </form>
+</div>
 
-    <hr>
+<div class="card">
+    <h2>📸 Reels из скриншотов</h2>
+    <p class="card-desc">Загрузи изображения — ReelForge добавит субтитры, монтаж и музыку.</p>
 
-    <p>Собери видео Reels из своих скриншотов (с субтитрами и музыкой)</p>
     <form action="/create_video" method="post" enctype="multipart/form-data">
-        <label>Тема ролика (для сценария и субтитров)</label>
-        <textarea name="topic" placeholder="Тема ролика..."></textarea>
 
-        <label>Скриншоты (можно несколько)</label>
-        <input type="file" name="images" multiple accept="image/*">
+        <label>🎯 Тема ролика</label>
+        <textarea name="topic" placeholder="Например: Как пользоваться нашим приложением"></textarea>
 
-        <label>Музыка (необязательно, mp3/wav)</label>
-        <input type="file" name="music" accept="audio/*">
+        <label>🖼️ Скриншоты</label>
+        <input class="file" type="file" name="images" multiple accept="image/*">
 
-        <button type="submit">Собрать видео из скриншотов</button>
+        <label>🎵 Музыка <span style="color:#666">(необязательно)</span></label>
+        <input class="file" type="file" name="music" accept="audio/*">
+
+        <button class="btn" type="submit">🎬 Собрать Reels из скриншотов</button>
     </form>
+</div>
 
-    <hr>
+<div class="card">
+    <h2>🎥 Reels из видео</h2>
+    <p class="card-desc">Загрузи несколько видео — система сама выберет лучшие моменты и соберёт ролик.</p>
 
-    <p>Собери Reels из видео-кусков (система сама выберет лучшие моменты и смонтирует)</p>
     <form action="/create_reel_from_videos" method="post" enctype="multipart/form-data">
-        <label>Тема ролика (для сценария и субтитров)</label>
-        <textarea name="topic" placeholder="Тема ролика..."></textarea>
 
-        <label>Видео-куски (можно несколько)</label>
-        <input type="file" name="videos" multiple accept="video/*">
+        <label>🎯 Тема ролика</label>
+        <textarea name="topic" placeholder="Например: Обзор продукта за 30 секунд"></textarea>
 
-        <label>Музыка (необязательно, mp3/wav)</label>
-        <input type="file" name="music" accept="audio/*">
+        <label>🎞️ Видео-куски</label>
+        <input class="file" type="file" name="videos" multiple accept="video/*">
 
-        <button type="submit">Собрать Reels из видео</button>
+        <label>🎵 Музыка <span style="color:#666">(необязательно)</span></label>
+        <input class="file" type="file" name="music" accept="audio/*">
+
+        <button class="btn" type="submit">🚀 Собрать Reels из видео</button>
     </form>
+</div>
+
+<div class="footer">
+    ReelForge AI • Создание коротких видео с помощью AI
+</div>
+
+</div>
+
+<div class="overlay" id="loading">
+    <div class="loader-box">
+        <div class="spinner"></div>
+        <h2>Создаём твой Reels 🚀</h2>
+        <p id="statusText">Подготавливаем файлы...</p>
+
+        <div class="timer" id="timer">00:00</div>
+
+        <div class="progress">
+            <div class="progress-bar"></div>
+        </div>
+
+        <div class="steps">
+            <div class="step active" id="s1"><span class="dot"></span> Загружаем материалы</div>
+            <div class="step" id="s2"><span class="dot"></span> Анализируем контент</div>
+            <div class="step" id="s3"><span class="dot"></span> Создаём сценарий</div>
+            <div class="step" id="s4"><span class="dot"></span> Монтируем видео</div>
+            <div class="step" id="s5"><span class="dot"></span> Финальный рендер</div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll("form").forEach(form=>{
+    form.addEventListener("submit",()=>{
+        const btn=form.querySelector("button");
+        if(btn){
+            btn.disabled=true;
+            btn.innerHTML="⏳ Создаём видео...";
+        }
+
+        document.getElementById("loading").style.display="flex";
+
+        let seconds=0;
+        const timer=document.getElementById("timer");
+        const status=document.getElementById("statusText");
+
+        setInterval(()=>{
+            seconds++;
+            const m=String(Math.floor(seconds/60)).padStart(2,"0");
+            const s=String(seconds%60).padStart(2,"0");
+            timer.textContent=m+":"+s;
+        },1000);
+
+        const messages=[
+            ["s1","Загружаем материалы..."],
+            ["s2","Анализируем контент..."],
+            ["s3","Создаём сценарий..."],
+            ["s4","Монтируем видео..."],
+            ["s5","Финальный рендер..."]
+        ];
+
+        messages.forEach((item,i)=>{
+            setTimeout(()=>{
+                document.querySelectorAll(".step").forEach(x=>x.classList.remove("active"));
+                document.getElementById(item[0]).classList.add("active");
+                status.textContent=item[1];
+            },(i+1)*5000);
+        });
+    });
+});
+</script>
+
 </body>
 </html>
 """
