@@ -805,6 +805,32 @@ def payment():
     </html>
     """
 
+@app.route("/admin/reset-free")
+def admin_reset_free():
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    response = redirect("/?access=rf2026free")
+    response.set_cookie(
+        "rf_access_count",
+        "0",
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        samesite="Lax"
+    )
+    response.set_cookie(
+        "rf_access",
+        "rf2026free",
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        samesite="Lax"
+    )
+    return response
+
+
 @app.route("/health")
 def health():
     return "OK", 200

@@ -33,6 +33,11 @@ def check_access():
     if request.path == "/payment":
         return None
 
+    # Админский сброс бесплатных входов.
+    # Сам маршрут дополнительно защищён ADMIN_RESET_TOKEN.
+    if request.path == "/admin/reset-free":
+        return None
+
     try:
         count = int(request.cookies.get(COUNT_COOKIE_NAME, "0"))
     except (TypeError, ValueError):
