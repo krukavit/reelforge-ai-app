@@ -7,10 +7,194 @@ import glob
 import shutil
 import threading
 import time
+import psycopg
 from flask import Flask, request, render_template_string, send_from_directory, redirect
 
 from access_middleware import check_access, set_access_cookie
+
+
+# =========================
+# PostgreSQL
+# =========================
+
+def db_connect():
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL не задан")
+    return psycopg.connect(database_url)
+
+
+def init_db():
+    """Создаёт таблицы ReelForge AI при запуске приложения."""
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    user_key TEXT UNIQUE NOT NULL,
+                    videos_balance INTEGER NOT NULL DEFAULT 0,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS payments (
+                    id SERIAL PRIMARY KEY,
+                    user_key TEXT NOT NULL,
+                    amount_rub INTEGER NOT NULL,
+                    videos INTEGER NOT NULL DEFAULT 10,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    confirmed_at TIMESTAMPTZ
+                )
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS usage (
+                    id SERIAL PRIMARY KEY,
+                    user_key TEXT NOT NULL,
+                    job_id TEXT UNIQUE NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+        conn.commit()
+
+
+def ensure_user(user_key):
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO users (user_key)
+                VALUES (%s)
+                ON CONFLICT (user_key) DO NOTHING
+            """, (user_key,))
+        conn.commit()
+
+
+def get_user_balance(user_key):
+    ensure_user(user_key)
+
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT videos_balance FROM users WHERE user_key = %s",
+                (user_key,)
+            )
+            row = cur.fetchone()
+
+    return row[0] if row else 0
+
+
+def add_videos(user_key, amount):
+    ensure_user(user_key)
+
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE users
+                SET videos_balance = videos_balance + %s
+                WHERE user_key = %s
+            """, (amount, user_key))
+        conn.commit()
+
+
+def create_payment(user_key, amount_rub=10, videos=10):
+    ensure_user(user_key)
+
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO payments (user_key, amount_rub, videos, status)
+                VALUES (%s, %s, %s, 'pending')
+                RETURNING id
+            """, (user_key, amount_rub, videos))
+
+            payment_id = cur.fetchone()[0]
+
+        conn.commit()
+
+    return payment_id
+
+
+def confirm_payment(payment_id):
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT user_key, videos, status
+                FROM payments
+                WHERE id = %s
+                FOR UPDATE
+            """, (payment_id,))
+
+            row = cur.fetchone()
+
+            if not row:
+                return False, "Платёж не найден"
+
+            user_key, videos, status = row
+
+            if status == "confirmed":
+                return False, "Платёж уже подтверждён"
+
+            cur.execute("""
+                UPDATE payments
+                SET status = 'confirmed',
+                    confirmed_at = NOW()
+                WHERE id = %s
+            """, (payment_id,))
+
+            cur.execute("""
+                UPDATE users
+                SET videos_balance = videos_balance + %s
+                WHERE user_key = %s
+            """, (videos, user_key))
+
+        conn.commit()
+
+    return True, "Платёж подтверждён"
+
+
+def consume_video(user_key, job_id):
+    ensure_user(user_key)
+
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT videos_balance
+                FROM users
+                WHERE user_key = %s
+                FOR UPDATE
+            """ , (user_key,))
+
+            row = cur.fetchone()
+
+            if not row or row[0] <= 0:
+                return False
+
+            cur.execute("""
+                UPDATE users
+                SET videos_balance = videos_balance - 1
+                WHERE user_key = %s
+            """, (user_key,))
+
+            cur.execute("""
+                INSERT INTO usage (user_key, job_id)
+                VALUES (%s, %s)
+                ON CONFLICT (job_id) DO NOTHING
+            """, (user_key, job_id))
+
+        conn.commit()
+
+    return True
+
 app = Flask(__name__)
+
+try:
+    init_db()
+    print("POSTGRES INIT OK")
+except Exception as e:
+    print(f"DATABASE INIT WARNING: {e}")
 
 BACKEND_URL = os.environ.get(
     "BACKEND_URL",
