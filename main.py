@@ -1140,19 +1140,53 @@ def build_reel_from_videos(video_paths, output_path, captions=None, target_durat
             raise RuntimeError(f"[exit code {result2.returncode}] " + result2.stderr[-1000:])
 
 def mux_music(video_path, music_path, output_path):
+    if not os.path.exists(video_path):
+        raise RuntimeError(f"VIDEO NOT FOUND: {video_path}")
+
+    if not music_path or not os.path.exists(music_path):
+        raise RuntimeError(f"MUSIC NOT FOUND: {music_path}")
+
+    video_size = os.path.getsize(video_path)
+    music_size = os.path.getsize(music_path)
+
+    print(
+        f"[MUSIC] video={video_path} size={video_size} "
+        f"music={music_path} size={music_size}",
+        flush=True
+    )
+
     cmd = [
         "ffmpeg", "-y",
         "-i", video_path,
         "-stream_loop", "-1", "-i", music_path,
-        "-map", "0:v", "-map", "1:a",
+        "-map", "0:v:0",
+        "-map", "1:a:0",
         "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "128k",
+        "-c:a", "aac",
+        "-b:a", "128k",
         "-shortest",
+        "-movflags", "+faststart",
         output_path
     ]
+
+    print(f"[MUSIC] FFMPEG START: {cmd}", flush=True)
+
     result = subprocess.run(cmd, capture_output=True, text=True)
+
     if result.returncode != 0:
-        raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
+        print(f"[MUSIC] FFMPEG ERROR: {result.stderr[-3000:]}", flush=True)
+        raise RuntimeError(
+            f"[exit code {result.returncode}] " + result.stderr[-1000:]
+        )
+
+    if not os.path.exists(output_path):
+        raise RuntimeError(f"MUSIC OUTPUT NOT CREATED: {output_path}")
+
+    print(
+        f"[MUSIC] COMPLETE output={output_path} "
+        f"size={os.path.getsize(output_path)}",
+        flush=True
+    )
 
 def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
     print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
