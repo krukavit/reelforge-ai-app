@@ -1039,7 +1039,7 @@ def build_slideshow_video(image_dir, output_path, captions=None, seconds_per_ima
     with open(list_path, "w") as f:
         for img in images:
             f.write(f"file '{img}'\n")
-            f.write(f"duration {seconds_per_image}\n")
+")
         f.write(f"file '{images[-1]}'\n")
 
     vf_chain = "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
