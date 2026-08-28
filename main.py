@@ -1092,6 +1092,24 @@ def parse_target_duration(topic):
     return 40
 
 
+def parse_video_instructions(topic):
+    if not topic:
+        return {}
+    text = topic.lower()
+    instructions = {"crop_mode": "pad", "subtitle_position": "h-220"}
+    if any(w in text for w in ["не обрезать","титры","субтитры","низ","внизу","subtitle","caption","необрезала","не обрезала"]):
+        instructions["crop_mode"] = "pad_safe"
+        instructions["subtitle_position"] = "h-320"
+    elif any(w in text for w in ["во весь экран","обрезать","cover","crop","заполнить","fill","увеличь","увеличить"]):
+        instructions["crop_mode"] = "cover"
+    return instructions
+
+def get_scale_vf(crop_mode):
+    if crop_mode == "cover":
+        return "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,format=yuv420p"
+    return "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p"
+
+
 def get_video_duration(path):
     cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -1100,63 +1118,40 @@ def get_video_duration(path):
     except Exception:
         return 0.0
 
-def extract_auto_clip(src_path, out_path, clip_seconds=4):
+
+def extract_auto_clip(src_path, out_path, clip_seconds=4, instructions=None):
+    instructions = instructions or {}
     duration = get_video_duration(src_path)
     if duration <= 0:
         raise RuntimeError(f"Не удалось определить длительность видео: {src_path}")
-
+    vf = get_scale_vf(instructions.get("crop_mode", "pad"))
     if duration < clip_seconds:
-        # Зацикливаем короткое видео до требуемой длительности.
         start = 0
         length = clip_seconds
-        cmd = [
-            "ffmpeg", "-y",
-            "-stream_loop", "-1",
-            "-i", src_path,
-            "-t", str(length),
-            "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-            "-r", "24",
-            "-an",
-            "-preset", "ultrafast",
-            "-threads", "1",
-            out_path
-        ]
+        cmd = ["ffmpeg","-y","-stream_loop","-1","-i",src_path,"-t",str(length),"-vf",vf,"-r","24","-an","-preset","ultrafast","-threads","1",out_path]
     else:
         start = duration * 0.2
         if start + clip_seconds > duration:
             start = max(0, duration - clip_seconds)
         length = clip_seconds
-
-        cmd = [
-            "ffmpeg", "-y",
-            "-ss", str(start),
-            "-i", src_path,
-            "-t", str(length),
-            "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-            "-r", "24",
-            "-an",
-            "-preset", "ultrafast",
-            "-threads", "1",
-            out_path
-        ]
-
+        cmd = ["ffmpeg","-y","-ss",str(start),"-i",src_path,"-t",str(length),"-vf",vf,"-r","24","-an","-preset","ultrafast","-threads","1",out_path]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
     return length
 
-def build_reel_from_videos(video_paths, output_path, captions=None, target_duration=40):
+
+def build_reel_from_videos(video_paths, output_path, captions=None, target_duration=40, instructions=None):
+    instructions = instructions or {}
     clip_dir = os.path.dirname(output_path)
     clip_paths = []
-
     clip_seconds = max(1, target_duration / max(1, len(video_paths)))
-
     for i, vp in enumerate(video_paths):
         clip_path = os.path.join(clip_dir, f"clip{i:03d}.mp4")
-        extract_auto_clip(vp, clip_path, clip_seconds=clip_seconds)
+        extract_auto_clip(vp, clip_path, clip_seconds=clip_seconds, instructions=instructions)
         clip_paths.append(clip_path)
-
     font_path = get_font_path()
+    sub_pos = instructions.get("subtitle_position", "h-220")
     if captions and font_path:
         for i, clip_path in enumerate(clip_paths):
             cap = captions[i] if i < len(captions) else ""
@@ -1164,40 +1159,20 @@ def build_reel_from_videos(video_paths, output_path, captions=None, target_durat
                 continue
             safe_cap = escape_drawtext(cap)
             tagged_path = clip_path.replace(".mp4", "_cap.mp4")
-            vf = (
-                f"drawtext=fontfile='{font_path}':text='{safe_cap}':"
-                f"fontsize=42:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=12:"
-                f"x=(w-text_w)/2:y=h-220"
-            )
-            cmd = [
-                "ffmpeg", "-y", "-i", clip_path,
-                "-vf", vf,
-                "-r", "24", "-preset", "ultrafast", "-threads", "1", "-an",
-                tagged_path
-            ]
+            vf = f"drawtext=fontfile='{font_path}':text='{safe_cap}':fontsize=42:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=12:x=(w-text_w)/2:y={sub_pos}"
+            cmd = ["ffmpeg","-y","-i",clip_path,"-vf",vf,"-r","24","-preset","ultrafast","-threads","1","-an",tagged_path]
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
                 clip_paths[i] = tagged_path
-
     list_path = os.path.join(clip_dir, "clips_list.txt")
     with open(list_path, "w") as f:
         for cp in clip_paths:
-            f.write(f"file '{cp}'\n")
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-f", "concat", "-safe", "0", "-i", list_path,
-        "-c", "copy",
-        output_path
-    ]
+            f.write(f"file '{cp}'
+")
+    cmd = ["ffmpeg","-y","-f","concat","-safe","0","-i",list_path,"-c","copy",output_path]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        cmd2 = [
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0", "-i", list_path,
-            "-r", "24", "-preset", "ultrafast", "-threads", "1",
-            output_path
-        ]
+        cmd2 = ["ffmpeg","-y","-f","concat","-safe","0","-i",list_path,"-r","24","-preset","ultrafast","-threads","1",output_path]
         result2 = subprocess.run(cmd2, capture_output=True, text=True)
         if result2.returncode != 0:
             raise RuntimeError(f"[exit code {result2.returncode}] " + result2.stderr[-1000:])
@@ -1257,6 +1232,7 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
         script = None
         captions = None
         if topic:
+        instructions = parse_video_instructions(topic)
             target_duration = parse_target_duration(topic)
             ai_topic = (
                 f"{topic}\n\n"
@@ -1277,7 +1253,7 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
         target_duration = parse_target_duration(topic)
-        print(f"[JOB {job_id}] target_duration={target_duration}", flush=True)
+        print(f"[JOB {job_id}] target_duration={target_duration} crop_mode={instructions.get('crop_mode', 'pad')}", flush=True)
         print(f"[JOB {job_id}] START RENDER mode={mode}", flush=True)
 
         if mode == "images":
@@ -1293,7 +1269,8 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
                 files_meta,
                 silent_path,
                 captions=captions,
-                target_duration=target_duration
+                target_duration=target_duration,
+                instructions=instructions
             )
 
         print(f"[JOB {job_id}] RENDER COMPLETE silent={silent_path}", flush=True)
