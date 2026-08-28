@@ -608,6 +608,9 @@ async function uploadVideoForm(form) {
 
         // Музыка загружается небольшими частями, чтобы избежать
         // Gunicorn NoMoreData на больших multipart-запросах.
+        console.log("[MUSIC-CLIENT] input=", musicInput);
+        console.log("[MUSIC-CLIENT] files=", musicInput ? musicInput.files.length : 0);
+
         if (musicInput && musicInput.files && musicInput.files.length) {
             const musicFile = musicInput.files[0];
             const CHUNK_SIZE = 4 * 1024 * 1024;
