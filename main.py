@@ -58,6 +58,14 @@ def init_db():
                 )
             """)
 
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS emails (
+                    id SERIAL PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
         conn.commit()
 
 
@@ -2246,6 +2254,32 @@ def admin_reset_free():
         samesite="Lax"
     )
     return response
+
+
+@app.route("/collect-email", methods=["GET"])
+def collect_email():
+    email = (request.args.get("email") or "").strip().lower()
+
+    if not email:
+        return "Email не указан", 400
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO emails (email)
+                    VALUES (%s)
+                    ON CONFLICT (email) DO NOTHING
+                """, (email,))
+            conn.commit()
+
+        print(f"[EMAIL] collected: {email}", flush=True)
+
+    except Exception as e:
+        print(f"[EMAIL] ERROR: {e}", flush=True)
+        return "Ошибка сохранения email", 500
+
+    return redirect("/")
 
 
 @app.route("/health")
