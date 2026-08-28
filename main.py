@@ -628,10 +628,16 @@ async function uploadVideoForm(form) {
         startData.append("topic", topicInput ? topicInput.value : "");
         startData.append("total", String(files.length));
 
-        const startResponse = await fetch("/start_video_upload", {
-            method: "POST",
-            body: startData
-        });
+        let startResponse;
+        try {
+            startResponse = await fetch("/start_video_upload", {
+                method: "POST",
+                body: startData
+            });
+        } catch (e) {
+            console.error("[FETCH ERROR] /start_video_upload", e);
+            throw new Error("Не удалось связаться с сервером: /start_video_upload — " + e.message);
+        }
 
         if (!startResponse.ok) {
             throw new Error("Не удалось начать загрузку");
@@ -668,10 +674,19 @@ async function uploadVideoForm(form) {
             fd.append("index", String(i));
             fd.append("video", files[i], files[i].name);
 
-            const response = await fetch("/upload_video_part", {
-                method: "POST",
-                body: fd
-            });
+            let response;
+            try {
+                response = await fetch("/upload_video_part", {
+                    method: "POST",
+                    body: fd
+                });
+            } catch (e) {
+                console.error("[FETCH ERROR] /upload_video_part", e);
+                throw new Error(
+                    "Не удалось загрузить видео " + (i + 1) +
+                    ": /upload_video_part — " + e.message
+                );
+            }
 
             updateUploadProgress(
                 5 + (((i + 1) / files.length) * 65),
@@ -797,10 +812,16 @@ async function uploadVideoForm(form) {
         const finishData = new URLSearchParams();
         finishData.append("job_id", jobId);
 
-        const finishResponse = await fetch("/finish_video_upload", {
-            method: "POST",
-            body: finishData
-        });
+        let finishResponse;
+        try {
+            finishResponse = await fetch("/finish_video_upload", {
+                method: "POST",
+                body: finishData
+            });
+        } catch (e) {
+            console.error("[FETCH ERROR] /finish_video_upload", e);
+            throw new Error("Не удалось завершить загрузку: /finish_video_upload — " + e.message);
+        }
 
         if (!finishResponse.ok) {
             let message = "Не удалось запустить обработку";
