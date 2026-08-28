@@ -682,28 +682,178 @@ document.querySelectorAll("form").forEach(form => {
 
 RESULT_HTML = """
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>ReelForge AI — Результат</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReelForge AI — Ваш Reels готов</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
-        h1 { color: #333; }
-        .result { background: #f4f4f4; padding: 20px; border-radius: 8px; white-space: pre-wrap; }
-        a { display: inline-block; margin-top: 20px; color: #007bff; }
-        video { width: 100%; margin-top: 20px; border-radius: 8px; }
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #07070d;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        .logo {
+            text-align: center;
+            font-size: 25px;
+            font-weight: 800;
+            margin-bottom: 32px;
+        }
+
+        .logo span {
+            color: #a855f7;
+        }
+
+        .success {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .check {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            border-radius: 50%;
+            background: #22c55e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 30px;
+        }
+
+        .subtitle {
+            margin: 0;
+            color: #9ca3af;
+            font-size: 16px;
+        }
+
+        .video-card {
+            background: #111118;
+            border: 1px solid #272733;
+            border-radius: 18px;
+            padding: 10px;
+            margin-top: 24px;
+            overflow: hidden;
+        }
+
+        video {
+            display: block;
+            width: 100%;
+            max-height: 75vh;
+            border-radius: 12px;
+            background: #000;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .button {
+            display: block;
+            width: 100%;
+            padding: 16px 20px;
+            border-radius: 12px;
+            text-align: center;
+            text-decoration: none;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .download {
+            background: #a855f7;
+            color: #fff;
+        }
+
+        .download:active {
+            background: #9333ea;
+        }
+
+        .new-video {
+            background: #1b1b24;
+            color: #fff;
+            border: 1px solid #30303b;
+        }
+
+        .script {
+            margin-top: 24px;
+            padding: 18px;
+            background: #111118;
+            border: 1px solid #272733;
+            border-radius: 14px;
+            white-space: pre-wrap;
+            color: #d1d5db;
+            line-height: 1.5;
+        }
+
+        @media (min-width: 600px) {
+            .container {
+                padding-top: 45px;
+            }
+
+            .actions {
+                flex-direction: row;
+            }
+
+            .button {
+                flex: 1;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>Готово!</h1>
-    {% if script %}
-    <div class="result">{{ script }}</div>
-    {% endif %}
-    {% if video_url %}
-    <video controls src="{{ video_url }}"></video><br>
-    <a href="{{ video_url }}" download>⬇ Скачать видео</a><br>
-    {% endif %}
-    <a href="/">← Сгенерировать ещё</a>
+    <main class="container">
+
+        <div class="logo">ReelForge <span>AI</span></div>
+
+        <section class="success">
+            <div class="check">✓</div>
+            <h1>Ваш Reels готов!</h1>
+            <p class="subtitle">Видео успешно создано</p>
+        </section>
+
+        {% if video_url %}
+        <div class="video-card">
+            <video controls playsinline preload="metadata" src="{{ video_url }}"></video>
+        </div>
+
+        <div class="actions">
+            <a class="button download" href="{{ video_url }}" download>
+                ⬇ Скачать видео
+            </a>
+
+            <a class="button new-video" href="/">
+                ＋ Создать ещё один
+            </a>
+        </div>
+        {% endif %}
+
+        {% if script %}
+        <div class="script">{{ script }}</div>
+        {% endif %}
+
+    </main>
 </body>
 </html>
 """
