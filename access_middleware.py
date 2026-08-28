@@ -36,6 +36,7 @@ def check_access():
         "/start_video_upload",
         "/upload_video_part",
         "/upload_video_music",
+        "/upload_video_music_part",
         "/finish_video_upload",
     ):
         return None
