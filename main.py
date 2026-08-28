@@ -1229,32 +1229,52 @@ ERROR_HTML = """
 
 def generate_script(topic):
     client = get_groq_client()
+    user_prompt = (topic or "").strip()
+
+    if user_prompt:
+        task = f"""ЗАДАНИЕ ПОЛЬЗОВАТЕЛЯ:
+{user_prompt}
+
+Создай готовый сценарий Instagram Reels строго по основной идее этого задания.
+Если пользователь указал конкретные требования — соблюдай их.
+Если какие-то параметры не указаны — выбери их самостоятельно.
+Не меняй основную тему пользователя.
+"""
+    else:
+        task = """ПОЛЬЗОВАТЕЛЬ НЕ УКАЗАЛ ЗАДАНИЕ.
+
+Создай полностью автоматически готовый сценарий Instagram Reels.
+Сам выбери интересную тему, сильный хук, структуру, сцены, стиль и призыв к действию.
+Продолжительность — примерно 40 секунд.
+"""
+
     response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=[
-            {"role": "system", "content": """Ты — профессиональный сценарист Instagram Reels.
+            {
+                "role": "system",
+                "content": """Ты — профессиональный сценарист Instagram Reels.
 
-Текст пользователя ниже — это НЕ готовый текст для видео, а задание для тебя.
-
-Твоя задача:
-1. Понять смысл и требования задания пользователя.
-2. Создать по этому заданию готовый сценарий короткого Reels.
-3. Сделать сильный хук в начале.
-4. Разбить идею на логичные сцены.
-5. Писать конкретно и динамично.
-6. Если указана длительность — строго учитывать её.
-7. Не выводить и не повторять исходный промт пользователя как готовый текст.
-8. Сценарий должен быть пригоден для дальнейшего создания коротких субтитров.
-
-Верни только сценарий Reels без объяснений о своей работе."""},
-            {"role": "user", "content": f"""ЗАДАНИЕ ПОЛЬЗОВАТЕЛЯ:
-
-{topic}
-
-Создай сценарий Reels строго по этому заданию."""}
+Правила:
+1. Если пользователь дал задание — следуй его основной идее.
+2. Никогда не заменяй тему пользователя своей темой.
+3. Всё, что пользователь не указал, выбирай самостоятельно.
+4. Если указана длительность — соблюдай её.
+5. Создавай сильный хук в начале.
+6. Разбивай сценарий на логичные сцены.
+7. Пиши конкретно и динамично.
+8. Сценарий должен быть пригоден для создания субтитров.
+9. Не копируй пользовательский промт как готовый текст видео.
+10. Верни только сценарий без объяснений."""
+            },
+            {
+                "role": "user",
+                "content": task
+            }
         ],
-        max_tokens=500
+        max_tokens=800
     )
+
     return response.choices[0].message.content
 
 def generate_captions(topic, count):
@@ -1654,42 +1674,35 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
         captions = None
         instructions = parse_video_instructions(topic)
 
-        if topic:
-            target_duration = parse_target_duration(topic)
-            ai_topic = (
-                f"{topic}\n\n"
-                f"ВАЖНО: создай сценарий для Reels примерно на "
-                f"{target_duration} секунд. "
-                f"Рассчитай текст и сцены под эту длительность."
+        # AI всегда создаёт сценарий:
+        # есть промт -> строго учитывает его;
+        # пустой промт -> работает полностью автоматически.
+        try:
+            script = generate_script(topic)
+            print(
+                f"[AI SCRIPT] generated length={len(script or '')}",
+                flush=True
             )
+        except Exception as e:
+            print(f"[AI SCRIPT] ERROR: {e}", flush=True)
+            script = None
 
+        # Субтитры строятся только на основе готового AI-сценария.
+        if script:
             try:
-                script = generate_script(ai_topic)
+                captions = generate_captions(
+                    script,
+                    len(files_meta)
+                )
                 print(
-                    f"[AI SCRIPT] generated length={len(script or '')}",
+                    f"[AI CAPTIONS] generated count={len(captions or [])}",
                     flush=True
                 )
             except Exception as e:
-                print(f"[AI SCRIPT] ERROR: {e}", flush=True)
-                script = None
-
-            # Субтитры создаются ТОЛЬКО из сгенерированного AI-сценария.
-            # Исходный prompt пользователя напрямую в captions не передаём.
-            if script:
-                try:
-                    captions = generate_captions(
-                        script,
-                        len(files_meta)
-                    )
-                    print(
-                        f"[AI CAPTIONS] generated count={len(captions or [])}",
-                        flush=True
-                    )
-                except Exception as e:
-                    print(f"[AI CAPTIONS] ERROR: {e}", flush=True)
-                    captions = []
-            else:
+                print(f"[AI CAPTIONS] ERROR: {e}", flush=True)
                 captions = []
+        else:
+            captions = []
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
