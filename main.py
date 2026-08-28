@@ -222,6 +222,11 @@ _font_path = None
 JOBS = {}
 JOBS_LOCK = threading.Lock()
 
+# Upload limits
+MAX_VIDEO_SIZE = 100 * 1024 * 1024       # 100 MB на одно видео
+MAX_PROJECT_SIZE = 300 * 1024 * 1024     # 300 MB на все видео проекта
+MAX_UPLOAD_REQUEST = 105 * 1024 * 1024   # небольшой запас multipart
+
 def set_job(job_id, **kwargs):
     with JOBS_LOCK:
         JOBS.setdefault(job_id, {})
@@ -474,6 +479,9 @@ input[type=file]::file-selector-button{
 
         <label>🎞️ Видео-куски</label>
         <input class="file" type="file" name="videos" multiple accept="video/*">
+        <p style="color:#666;font-size:13px;margin-top:6px;">
+            Максимум: 100 MB на одно видео и 300 MB на весь проект.
+        </p>
 
         <label>🎵 Музыка <span style="color:#666">(необязательно)</span></label>
         <input class="file" type="file" name="music" accept="audio/*">
@@ -552,8 +560,40 @@ async function uploadVideoForm(form) {
 
     const files = Array.from(filesInput.files || []);
 
+    const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
+    const MAX_PROJECT_SIZE = 300 * 1024 * 1024;
+
     if (!files.length) {
         alert("Выбери хотя бы одно видео!");
+        return;
+    }
+
+    // Проверяем размер каждого видео до начала загрузки.
+    for (const file of files) {
+        if (file.size > MAX_VIDEO_SIZE) {
+            alert(
+                "Видео слишком большое: " + file.name +
+                "\n\nМаксимальный размер одного видео — 100 MB." +
+                "\nРазмер этого файла — " +
+                (file.size / 1024 / 1024).toFixed(1) + " MB."
+            );
+            return;
+        }
+    }
+
+    // Проверяем общий размер проекта до начала загрузки.
+    const totalVideoSize = files.reduce(
+        (sum, file) => sum + file.size,
+        0
+    );
+
+    if (totalVideoSize > MAX_PROJECT_SIZE) {
+        alert(
+            "Проект слишком большой." +
+            "\n\nМаксимальный общий размер видео — 300 MB." +
+            "\nСейчас выбрано — " +
+            (totalVideoSize / 1024 / 1024).toFixed(1) + " MB."
+        );
         return;
     }
 
@@ -1357,6 +1397,15 @@ def upload_video_part():
     if not job_id or not video or not video.filename:
         return jsonify({"error": "Видео не получено"}), 400
 
+    # Защита от слишком большого HTTP multipart-запроса.
+    if request.content_length and request.content_length > MAX_UPLOAD_REQUEST:
+        return jsonify({
+            "error": (
+                "Видео слишком большое. "
+                "Максимальный размер одного видео — 100 MB."
+            )
+        }), 413
+
     job = get_job(job_id)
     if not job:
         return jsonify({"error": "Задача не найдена"}), 404
@@ -1382,6 +1431,21 @@ def upload_video_part():
     video.save(video_path)
 
     size = os.path.getsize(video_path)
+
+    # Серверная проверка фактического размера файла.
+    if size > MAX_VIDEO_SIZE:
+        try:
+            os.remove(video_path)
+        except OSError:
+            pass
+
+        return jsonify({
+            "error": (
+                "Видео слишком большое. "
+                "Максимальный размер одного видео — 100 MB. "
+                f"Размер файла: {size / 1024 / 1024:.1f} MB."
+            )
+        }), 413
 
     with JOBS_LOCK:
         current = JOBS.setdefault(job_id, {})
@@ -1548,6 +1612,35 @@ def finish_video_upload():
         return jsonify({
             "error": f"Загружено {len(video_paths)} из {total} видео"
         }), 400
+
+    # Проверяем общий размер проекта перед запуском рендера.
+    total_video_bytes = 0
+
+    for video_path in video_paths:
+        if not os.path.exists(video_path):
+            return jsonify({
+                "error": "Один из загруженных файлов не найден."
+            }), 400
+
+        size = os.path.getsize(video_path)
+
+        if size > MAX_VIDEO_SIZE:
+            return jsonify({
+                "error": (
+                    "Видео превышает лимит 100 MB: "
+                    + os.path.basename(video_path)
+                )
+            }), 413
+
+        total_video_bytes += size
+
+    if total_video_bytes > MAX_PROJECT_SIZE:
+        return jsonify({
+            "error": (
+                "Общий размер проекта превышает лимит 300 MB. "
+                f"Сейчас: {total_video_bytes / 1024 / 1024:.1f} MB."
+            )
+        }), 413
 
     topic = job.get("topic", "")
     music_path = job.get("music_path")
