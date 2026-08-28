@@ -608,11 +608,31 @@ async function uploadVideoForm(form) {
 
         // Музыка загружается небольшими частями, чтобы избежать
         // Gunicorn NoMoreData на больших multipart-запросах.
-        console.log("[MUSIC-CLIENT] input=", musicInput);
-        console.log("[MUSIC-CLIENT] files=", musicInput ? musicInput.files.length : 0);
+        const musicInputEl = form.querySelector('input[type="file"][name="music"]');
+        const musicFile =
+            musicInputEl &&
+            musicInputEl.files &&
+            musicInputEl.files.length
+                ? musicInputEl.files[0]
+                : null;
 
-        if (musicInput && musicInput.files && musicInput.files.length) {
-            const musicFile = musicInput.files[0];
+        console.log("[MUSIC-CLIENT] input=", musicInputEl);
+        console.log("[MUSIC-CLIENT] file=", musicFile);
+        console.log(
+            "[MUSIC-CLIENT] name=",
+            musicFile ? musicFile.name : "NONE",
+            "size=",
+            musicFile ? musicFile.size : 0,
+            "type=",
+            musicFile ? musicFile.type : "NONE"
+        );
+
+        if (musicFile) {
+            if (btn) {
+                btn.innerHTML =
+                    "⏳ Музыка: " + musicFile.name +
+                    " (" + Math.round(musicFile.size / 1024 / 1024) + " MB)";
+            }
             const CHUNK_SIZE = 4 * 1024 * 1024;
             const totalChunks = Math.ceil(musicFile.size / CHUNK_SIZE);
 
