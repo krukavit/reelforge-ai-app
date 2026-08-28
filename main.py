@@ -211,8 +211,8 @@ def require_access():
 def apply_access_cookie(response):
     return set_access_cookie(response)
 
-UPLOAD_DIR = "/tmp/uploads"
-OUTPUT_DIR = "/tmp/outputs"
+UPLOAD_DIR = os.path.expanduser(os.environ.get("UPLOAD_DIR", "~/reelforge-test/uploads"))
+OUTPUT_DIR = os.path.expanduser(os.environ.get("OUTPUT_DIR", "~/reelforge-test/outputs"))
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -486,6 +486,12 @@ input[type=file]::file-selector-button{
         <label>🎵 Музыка <span style="color:#666">(необязательно)</span></label>
         <input class="file" type="file" name="music" accept="audio/*">
 
+        
+        {{ upload_progress_html|safe }}
+        
+
+        
+
         <button class="btn" type="submit">🚀 Собрать Reels из видео</button>
     </form>
 </div>
@@ -523,33 +529,34 @@ function showLoading() {
     const loading = document.getElementById("loading");
     if (loading) loading.style.display = "flex";
 
-    let seconds = 0;
     const timer = document.getElementById("timer");
     const status = document.getElementById("statusText");
 
-    setInterval(() => {
+    let seconds = 0;
+
+    if (window.reelForgeTimer) {
+        clearInterval(window.reelForgeTimer);
+    }
+
+    window.reelForgeTimer = setInterval(() => {
         seconds++;
+
         const m = String(Math.floor(seconds / 60)).padStart(2, "0");
         const sec = String(seconds % 60).padStart(2, "0");
+
         if (timer) timer.textContent = m + ":" + sec;
     }, 1000);
 
-    const messages = [
-        ["s1", "Загружаем материалы..."],
-        ["s2", "Анализируем контент..."],
-        ["s3", "Создаём сценарий..."],
-        ["s4", "Монтируем видео..."],
-        ["s5", "Финальный рендер..."]
-    ];
+    if (status) {
+        status.textContent = "Подготавливаем загрузку...";
+    }
 
-    messages.forEach((item, i) => {
-        setTimeout(() => {
-            document.querySelectorAll(".step").forEach(x => x.classList.remove("active"));
-            const step = document.getElementById(item[0]);
-            if (step) step.classList.add("active");
-            if (status) status.textContent = item[1];
-        }, (i + 1) * 5000);
+    document.querySelectorAll(".step").forEach(x => {
+        x.classList.remove("active");
     });
+
+    const first = document.getElementById("s1");
+    if (first) first.classList.add("active");
 }
 
 async function uploadVideoForm(form) {
@@ -602,6 +609,17 @@ async function uploadVideoForm(form) {
         btn.innerHTML = "⏳ Загружаем видео...";
     }
 
+    showUploadProgress();
+
+    updateUploadProgress(
+        2,
+        "📋 Подготовка загрузки",
+        "Выбрано видео: <b>" + files.length + "</b><br>" +
+        "Общий размер: <b>" +
+        (totalVideoSize / 1024 / 1024).toFixed(1) +
+        " MB</b>"
+    );
+
     showLoading();
 
     try {
@@ -622,9 +640,28 @@ async function uploadVideoForm(form) {
         const startResult = await startResponse.json();
         const jobId = startResult.job_id;
 
+        updateUploadProgress(
+            5,
+            "📤 Загрузка видео",
+            "Сессия создана.<br>Подготавливаем файлы..."
+        );
+
         // Загружаем КАЖДОЕ видео отдельным HTTP-запросом
         for (let i = 0; i < files.length; i++) {
             if (btn) btn.innerHTML = `⏳ Загружаем видео ${i + 1} из ${files.length}...`;
+
+            const videoPercent =
+                5 + ((i / files.length) * 65);
+
+            updateUploadProgress(
+                videoPercent,
+                "📤 Загружаем видео " + (i + 1) + " из " + files.length,
+                "Файл: <b>" + files[i].name + "</b><br>" +
+                "Размер: <b>" +
+                (files[i].size / 1024 / 1024).toFixed(1) +
+                " MB</b><br>" +
+                "Состояние: <b>загрузка...</b>"
+            );
 
             const fd = new FormData();
             fd.append("job_id", jobId);
@@ -636,6 +673,16 @@ async function uploadVideoForm(form) {
                 body: fd
             });
 
+            updateUploadProgress(
+                5 + (((i + 1) / files.length) * 65),
+                "✅ Видео " + (i + 1) + " из " + files.length + " загружено",
+                "Файл: <b>" + files[i].name + "</b><br>" +
+                "Размер: <b>" +
+                (files[i].size / 1024 / 1024).toFixed(1) +
+                " MB</b><br>" +
+                "Продолжение загрузки..."
+            );
+
             if (!response.ok) {
                 let message = "Ошибка загрузки видео " + (i + 1);
                 try {
@@ -645,6 +692,12 @@ async function uploadVideoForm(form) {
                 throw new Error(message);
             }
         }
+
+        updateUploadProgress(
+            72,
+            "🎵 Проверка музыки",
+            "Видео загружены.<br>Проверяем выбранную фоновую музыку..."
+        );
 
         // Музыка загружается небольшими частями, чтобы избежать
         // Gunicorn NoMoreData на больших multipart-запросах.
@@ -681,6 +734,16 @@ async function uploadVideoForm(form) {
                     btn.innerHTML =
                         `⏳ Загружаем музыку ${i + 1} из ${totalChunks}...`;
                 }
+
+                updateUploadProgress(
+                    72 + (((i + 1) / totalChunks) * 18),
+                    "🎵 Загружаем музыку " + (i + 1) + " из " + totalChunks,
+                    "Файл: <b>" + musicFile.name + "</b><br>" +
+                    "Часть: <b>" + (i + 1) + " / " + totalChunks + "</b><br>" +
+                    "Размер: <b>" +
+                    (musicFile.size / 1024 / 1024).toFixed(1) +
+                    " MB</b>"
+                );
 
                 const start = i * CHUNK_SIZE;
                 const end = Math.min(start + CHUNK_SIZE, musicFile.size);
@@ -722,6 +785,13 @@ async function uploadVideoForm(form) {
         }
 
         // После полной загрузки запускаем уже существующий рендер
+        updateUploadProgress(
+            92,
+            "🎬 Запускаем монтаж",
+            "Все файлы загружены.<br>" +
+            "Передаём проект ReelForge AI на обработку..."
+        );
+
         if (btn) btn.innerHTML = "🎬 Запускаем монтаж...";
 
         const finishData = new URLSearchParams();
@@ -741,8 +811,18 @@ async function uploadVideoForm(form) {
             throw new Error(message);
         }
 
-        window.location.href =
-            "/status/" + jobId + "?access=rf2026free";
+        updateUploadProgress(
+            97,
+            "⚙️ Монтаж выполняется",
+            "Видео загружены.<br>" +
+            "AI создаёт субтитры и собирает Reels.<br>" +
+            "<b>Не закрывайте страницу.</b>"
+        );
+
+        setTimeout(() => {
+            window.location.href =
+                "/status/" + jobId + "?access=rf2026free";
+        }, 500);
 
     } catch (error) {
         console.error(error);
@@ -953,6 +1033,114 @@ RESULT_HTML = """
     </main>
 </body>
 </html>
+"""
+
+UPLOAD_PROGRESS_HTML = """
+<div id="uploadProgress" style="
+    display:none;
+    margin:20px 0;
+    padding:22px;
+    background:#111118;
+    border:1px solid #2d2d3a;
+    border-radius:18px;
+    color:#fff;
+    text-align:left;
+    box-shadow:0 10px 35px rgba(0,0,0,.25);
+">
+    <div style="font-size:20px;font-weight:700;margin-bottom:16px;">
+        🚀 ReelForge AI
+    </div>
+
+    <div id="progressStage" style="font-size:16px;font-weight:600;margin-bottom:8px;">
+        Подготовка...
+    </div>
+
+    <div style="
+        width:100%;
+        height:12px;
+        background:#272733;
+        border-radius:20px;
+        overflow:hidden;
+        margin-bottom:8px;
+    ">
+        <div id="progressBar" style="
+            width:0%;
+            height:100%;
+            background:#a855f7;
+            border-radius:20px;
+            transition:width .3s ease;
+        "></div>
+    </div>
+
+    <div id="progressPercent" style="
+        font-size:14px;
+        color:#c4c4d0;
+        margin-bottom:16px;
+    ">
+        0%
+    </div>
+
+    <div id="progressDetails" style="
+        font-size:14px;
+        line-height:1.7;
+        color:#9ca3af;
+    ">
+        Ожидание...
+    </div>
+</div>
+
+<script>
+function showUploadProgress() {
+    const box = document.getElementById("uploadProgress");
+    if (box) box.style.display = "block";
+}
+
+function updateUploadProgress(percent, stage, details) {
+    const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+
+    const bar = document.getElementById("progressBar");
+    const percentEl = document.getElementById("progressPercent");
+    const stageEl = document.getElementById("progressStage");
+    const detailsEl = document.getElementById("progressDetails");
+
+    if (bar) bar.style.width = safePercent + "%";
+    if (percentEl) percentEl.textContent = Math.round(safePercent) + "%";
+    if (stageEl) stageEl.textContent = stage || "";
+    if (detailsEl) detailsEl.innerHTML = details || "";
+
+    // Синхронизируем с полноэкранным окном загрузки.
+    const status = document.getElementById("statusText");
+    if (status) status.textContent = stage || "";
+
+    const oldProgress = document.querySelector(".progress-bar");
+    if (oldProgress) {
+        oldProgress.style.animation = "none";
+        oldProgress.style.width = safePercent + "%";
+    }
+
+    // Определяем текущий этап.
+    let activeStep = 0;
+
+    if (safePercent >= 92) {
+        activeStep = 4;
+    } else if (safePercent >= 80) {
+        activeStep = 3;
+    } else if (safePercent >= 65) {
+        activeStep = 2;
+    } else {
+        activeStep = 0;
+    }
+
+    const steps = ["s1", "s2", "s3", "s4", "s5"];
+
+    steps.forEach((id, index) => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.toggle("active", index === activeStep);
+        }
+    });
+}
+</script>
 """
 
 PROCESSING_HTML = """
@@ -1435,7 +1623,10 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
 
 @app.route("/")
 def index():
-    return render_template_string(INDEX_HTML)
+    return render_template_string(
+        INDEX_HTML,
+        upload_progress_html=UPLOAD_PROGRESS_HTML
+    )
 
 @app.route("/generate", methods=["POST"])
 def generate():
