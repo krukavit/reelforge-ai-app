@@ -580,8 +580,8 @@ async function uploadVideoForm(form) {
         if (file.size > MAX_VIDEO_SIZE) {
             alert(
                 "Видео слишком большое: " + file.name +
-                "\n\nМаксимальный размер одного видео — 100 MB." +
-                "\nРазмер этого файла — " +
+                "\\n\\nМаксимальный размер одного видео — 100 MB." +
+                "\\nРазмер этого файла — " +
                 (file.size / 1024 / 1024).toFixed(1) + " MB."
             );
             return;
@@ -597,8 +597,8 @@ async function uploadVideoForm(form) {
     if (totalVideoSize > MAX_PROJECT_SIZE) {
         alert(
             "Проект слишком большой." +
-            "\n\nМаксимальный общий размер видео — 300 MB." +
-            "\nСейчас выбрано — " +
+            "\\n\\nМаксимальный общий размер видео — 300 MB." +
+            "\\nСейчас выбрано — " +
             (totalVideoSize / 1024 / 1024).toFixed(1) + " MB."
         );
         return;
