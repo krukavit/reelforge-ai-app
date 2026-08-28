@@ -838,6 +838,16 @@ document.querySelectorAll("form").forEach(form => {
     form.addEventListener("submit", event => {
         if (form.id === "videoUploadForm") {
             event.preventDefault();
+
+            // Показываем прогресс МГНОВЕННО при нажатии кнопки.
+            showUploadProgress();
+            updateUploadProgress(
+                1,
+                "📋 Подготовка загрузки",
+                "Проверяем выбранные видео..."
+            );
+
+            // Затем запускаем асинхронную загрузку.
             uploadVideoForm(form);
             return;
         }
@@ -1038,61 +1048,85 @@ RESULT_HTML = """
 UPLOAD_PROGRESS_HTML = """
 <div id="uploadProgress" style="
     display:none;
-    margin:20px 0;
-    padding:22px;
-    background:#111118;
-    border:1px solid #2d2d3a;
-    border-radius:18px;
-    color:#fff;
-    text-align:left;
-    box-shadow:0 10px 35px rgba(0,0,0,.25);
+    position:fixed;
+    inset:0;
+    z-index:99999;
+    background:rgba(7,7,13,.96);
+    align-items:center;
+    justify-content:center;
+    padding:20px;
 ">
-    <div style="font-size:20px;font-weight:700;margin-bottom:16px;">
-        🚀 ReelForge AI
-    </div>
-
-    <div id="progressStage" style="font-size:16px;font-weight:600;margin-bottom:8px;">
-        Подготовка...
-    </div>
-
     <div style="
-        width:100%;
-        height:12px;
-        background:#272733;
-        border-radius:20px;
-        overflow:hidden;
-        margin-bottom:8px;
+        width:min(520px,100%);
+        background:#111118;
+        border:1px solid #2d2d3a;
+        border-radius:22px;
+        padding:28px;
+        color:#fff;
+        text-align:center;
+        box-shadow:0 20px 70px rgba(0,0,0,.55);
     ">
-        <div id="progressBar" style="
-            width:0%;
-            height:100%;
-            background:#a855f7;
+        <div style="
+            font-size:25px;
+            font-weight:800;
+            margin-bottom:10px;
+        ">
+            🚀 ReelForge AI
+        </div>
+
+        <div id="progressStage" style="
+            font-size:18px;
+            font-weight:700;
+            margin-bottom:18px;
+        ">
+            Подготовка...
+        </div>
+
+        <div style="
+            width:100%;
+            height:16px;
+            background:#272733;
             border-radius:20px;
-            transition:width .3s ease;
-        "></div>
-    </div>
+            overflow:hidden;
+            margin-bottom:10px;
+        ">
+            <div id="progressBar" style="
+                width:0%;
+                height:100%;
+                background:#a855f7;
+                border-radius:20px;
+                transition:width .3s ease;
+            "></div>
+        </div>
 
-    <div id="progressPercent" style="
-        font-size:14px;
-        color:#c4c4d0;
-        margin-bottom:16px;
-    ">
-        0%
-    </div>
+        <div id="progressPercent" style="
+            font-size:16px;
+            font-weight:700;
+            color:#c4c4d0;
+            margin-bottom:18px;
+        ">
+            0%
+        </div>
 
-    <div id="progressDetails" style="
-        font-size:14px;
-        line-height:1.7;
-        color:#9ca3af;
-    ">
-        Ожидание...
+        <div id="progressDetails" style="
+            font-size:14px;
+            line-height:1.7;
+            color:#9ca3af;
+        ">
+            Подготавливаем загрузку...
+        </div>
     </div>
 </div>
 
 <script>
 function showUploadProgress() {
     const box = document.getElementById("uploadProgress");
-    if (box) box.style.display = "block";
+
+    if (box) {
+        box.style.display = "flex";
+    }
+
+    document.body.style.overflow = "hidden";
 }
 
 function updateUploadProgress(percent, stage, details) {
@@ -1108,7 +1142,6 @@ function updateUploadProgress(percent, stage, details) {
     if (stageEl) stageEl.textContent = stage || "";
     if (detailsEl) detailsEl.innerHTML = details || "";
 
-    // Синхронизируем с полноэкранным окном загрузки.
     const status = document.getElementById("statusText");
     if (status) status.textContent = stage || "";
 
@@ -1118,7 +1151,6 @@ function updateUploadProgress(percent, stage, details) {
         oldProgress.style.width = safePercent + "%";
     }
 
-    // Определяем текущий этап.
     let activeStep = 0;
 
     if (safePercent >= 92) {
@@ -1127,8 +1159,6 @@ function updateUploadProgress(percent, stage, details) {
         activeStep = 3;
     } else if (safePercent >= 65) {
         activeStep = 2;
-    } else {
-        activeStep = 0;
     }
 
     const steps = ["s1", "s2", "s3", "s4", "s5"];
@@ -1209,7 +1239,9 @@ def generate_captions(topic, count):
             return [str(c) for c in captions[:count]]
     except Exception:
         pass
-    return [topic[:40] if topic else ""] * count
+    # Не выводим исходный промт пользователя на видео.
+    # Если AI не смог создать captions — оставляем видео без текста.
+    return []
 
 def escape_drawtext(text):
     text = text.replace("\\", "\\\\")
@@ -1576,12 +1608,31 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
 
             try:
                 script = generate_script(ai_topic)
+                print(
+                    f"[AI SCRIPT] generated length={len(script or '')}",
+                    flush=True
+                )
             except Exception as e:
-                script = f"(Не удалось сгенерировать сценарий: {e})"
-            try:
-                captions = generate_captions(ai_topic, len(files_meta))
-            except Exception:
-                captions = None
+                print(f"[AI SCRIPT] ERROR: {e}", flush=True)
+                script = None
+
+            # Субтитры создаются ТОЛЬКО из сгенерированного AI-сценария.
+            # Исходный prompt пользователя напрямую в captions не передаём.
+            if script:
+                try:
+                    captions = generate_captions(
+                        script,
+                        len(files_meta)
+                    )
+                    print(
+                        f"[AI CAPTIONS] generated count={len(captions or [])}",
+                        flush=True
+                    )
+                except Exception as e:
+                    print(f"[AI CAPTIONS] ERROR: {e}", flush=True)
+                    captions = []
+            else:
+                captions = []
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
