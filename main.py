@@ -606,21 +606,55 @@ async function uploadVideoForm(form) {
             }
         }
 
-        // Музыка тоже загружается отдельным запросом
+        // Музыка загружается небольшими частями, чтобы избежать
+        // Gunicorn NoMoreData на больших multipart-запросах.
         if (musicInput && musicInput.files && musicInput.files.length) {
-            if (btn) btn.innerHTML = "⏳ Загружаем музыку...";
+            const musicFile = musicInput.files[0];
+            const CHUNK_SIZE = 4 * 1024 * 1024;
+            const totalChunks = Math.ceil(musicFile.size / CHUNK_SIZE);
 
-            const musicFd = new FormData();
-            musicFd.append("job_id", jobId);
-            musicFd.append("music", musicInput.files[0], musicInput.files[0].name);
+            for (let i = 0; i < totalChunks; i++) {
+                if (btn) {
+                    btn.innerHTML =
+                        `⏳ Загружаем музыку ${i + 1} из ${totalChunks}...`;
+                }
 
-            const musicResponse = await fetch("/upload_video_music", {
-                method: "POST",
-                body: musicFd
-            });
+                const start = i * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, musicFile.size);
+                const blob = musicFile.slice(start, end);
 
-            if (!musicResponse.ok) {
-                throw new Error("Не удалось загрузить музыку");
+                const musicFd = new FormData();
+                musicFd.append("job_id", jobId);
+                musicFd.append("index", String(i));
+                musicFd.append("total", String(totalChunks));
+                musicFd.append("name", musicFile.name);
+                musicFd.append("chunk", blob, musicFile.name + ".part");
+
+                let musicResponse;
+
+                try {
+                    musicResponse = await fetch("/upload_video_music_part", {
+                        method: "POST",
+                        body: musicFd
+                    });
+                } catch (e) {
+                    throw new Error(
+                        `Ошибка загрузки музыки, часть ${i + 1} из ${totalChunks}: ` +
+                        (e.message || "Failed to fetch")
+                    );
+                }
+
+                if (!musicResponse.ok) {
+                    let message =
+                        `Ошибка загрузки музыки, часть ${i + 1} из ${totalChunks}`;
+
+                    try {
+                        const data = await musicResponse.json();
+                        if (data.error) message = data.error;
+                    } catch (_) {}
+
+                    throw new Error(message);
+                }
             }
         }
 
@@ -1345,6 +1379,101 @@ def upload_video_music():
     )
 
     return jsonify({"ok": True})
+
+
+@app.route("/upload_video_music_part", methods=["POST"])
+def upload_video_music_part():
+    job_id = request.form.get("job_id", "")
+    chunk = request.files.get("chunk")
+
+    try:
+        index = int(request.form.get("index", "0"))
+        total = int(request.form.get("total", "0"))
+    except Exception:
+        return jsonify({"error": "Некорректные параметры части музыки"}), 400
+
+    if not job_id or not chunk or total <= 0 or index < 0 or index >= total:
+        return jsonify({"error": "Некорректная часть музыки"}), 400
+
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"error": "Задача не найдена"}), 404
+
+    job_dir = os.path.join(UPLOAD_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    original_name = request.form.get("name", "music.mp3")
+    ext = os.path.splitext(original_name)[1] or ".mp3"
+
+    part_path = os.path.join(job_dir, f"music.part{index:04d}")
+
+    started = time.time()
+    print(
+        f"[UPLOAD-MUSIC-PART] START job={job_id} "
+        f"index={index}/{total} "
+        f"name={original_name} content_length={request.content_length}",
+        flush=True
+    )
+
+    chunk.save(part_path)
+
+    size = os.path.getsize(part_path)
+
+    print(
+        f"[UPLOAD-MUSIC-PART] SAVED job={job_id} "
+        f"index={index}/{total} size={size} "
+        f"elapsed={time.time()-started:.2f}s",
+        flush=True
+    )
+
+    if index == total - 1:
+        music_path = os.path.join(job_dir, f"music{ext}")
+
+        missing = []
+        for i in range(total):
+            expected = os.path.join(job_dir, f"music.part{i:04d}")
+            if not os.path.exists(expected):
+                missing.append(i)
+
+        if missing:
+            return jsonify({
+                "error": f"Не хватает частей музыки: {missing}"
+            }), 400
+
+        with open(music_path, "wb") as out:
+            for i in range(total):
+                part = os.path.join(job_dir, f"music.part{i:04d}")
+                with open(part, "rb") as src:
+                    shutil.copyfileobj(src, out)
+
+        for i in range(total):
+            part = os.path.join(job_dir, f"music.part{i:04d}")
+            try:
+                os.remove(part)
+            except OSError:
+                pass
+
+        final_size = os.path.getsize(music_path)
+        set_job(job_id, music_path=music_path)
+
+        print(
+            f"[UPLOAD-MUSIC] COMPLETE job={job_id} "
+            f"parts={total} size={final_size}",
+            flush=True
+        )
+
+        return jsonify({
+            "ok": True,
+            "complete": True,
+            "size": final_size
+        })
+
+    return jsonify({
+        "ok": True,
+        "complete": False,
+        "index": index,
+        "size": size
+    })
 
 
 @app.route("/finish_video_upload", methods=["POST"])
