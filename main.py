@@ -520,7 +520,7 @@ input[type=file]::file-selector-button{
     <form action="/create_video" method="post" enctype="multipart/form-data">
 
         <label>🎯 Тема ролика</label>
-        <textarea name="topic" placeholder="Например: Как пользоваться нашим приложением"></textarea>
+        <textarea name="topic" placeholder="Например: Как пользоваться нашим приложением">{{ generated_script|default("") }}</textarea>
 
         <label>🖼️ Скриншоты</label>
         <input class="file" type="file" name="images" multiple accept="image/*">
@@ -539,7 +539,7 @@ input[type=file]::file-selector-button{
     <form id="videoUploadForm" action="/create_reel_from_videos" method="post" enctype="multipart/form-data">
 
         <label>🎯 Тема ролика</label>
-        <textarea name="topic" placeholder="Например: Обзор продукта за 30 секунд"></textarea>
+        <textarea name="topic" placeholder="Например: Обзор продукта за 30 секунд">{{ generated_script|default("") }}</textarea>
 
         <label>🎞️ Видео-куски</label>
         <input class="file" type="file" name="videos" multiple accept="video/*">
@@ -1125,7 +1125,7 @@ RESULT_HTML = """
         <div class="script">{{ script }}</div>
 
         <div class="actions" style="margin-top:20px;">
-            <a class="button download" href="/">
+            <a class="button download" href="/?script={{ script|urlencode }}">
                 🎬 Создать Reels из этого сценария
             </a>
         </div>
@@ -1814,9 +1814,11 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
 
 @app.route("/")
 def index():
+    script = request.args.get("script", "")
     return render_template_string(
         INDEX_HTML,
-        upload_progress_html=UPLOAD_PROGRESS_HTML
+        upload_progress_html=UPLOAD_PROGRESS_HTML,
+        generated_script=script
     )
 
 @app.route("/generate", methods=["POST"])
