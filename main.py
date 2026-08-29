@@ -3845,6 +3845,11 @@ th{
    +3
 </a>
 
+<a class="btn off"
+   href="/admin/add-free?key={{ admin_key }}&user_key={{ row[1] }}&amount=-3">
+   −3
+</a>
+
 <a class="btn reset"
    href="/admin/reset-user?key={{ admin_key }}&user_key={{ row[1] }}">
    Сброс
@@ -3913,7 +3918,10 @@ def admin_add_free():
     if not user_key:
         return "user_key не указан", 400
 
-    amount = max(1, min(amount, 1000))
+    amount = max(-1000, min(amount, 1000))
+
+    if amount == 0:
+        return redirect("/admin/users?key=" + admin_key)
 
     try:
         with db_connect() as conn:
@@ -3921,7 +3929,10 @@ def admin_add_free():
                 cur.execute("""
                     UPDATE users
                     SET free_entries_limit =
-                        free_entries_limit + %s
+                        GREATEST(
+                            free_entries_used,
+                            free_entries_limit + %s
+                        )
                     WHERE user_key = %s
                     RETURNING user_key, free_entries_limit
                 """, (amount, user_key))
