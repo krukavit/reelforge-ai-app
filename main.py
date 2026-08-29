@@ -1125,9 +1125,12 @@ RESULT_HTML = """
         <div class="script">{{ script }}</div>
 
         <div class="actions" style="margin-top:20px;">
-            <a class="button download" href="/?script={{ script|urlencode }}">
-                🎬 Создать Reels из этого сценария
-            </a>
+            <form action="/prepare_reel" method="post" style="margin:0;">
+                <input type="hidden" name="script" value="{{ script|e }}">
+                <button class="button download" type="submit" style="border:0;cursor:pointer;">
+                    🎬 Создать Reels из этого сценария
+                </button>
+            </form>
         </div>
         {% endif %}
 
@@ -1815,6 +1818,15 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
 @app.route("/")
 def index():
     script = request.args.get("script", "")
+    return render_template_string(
+        INDEX_HTML,
+        upload_progress_html=UPLOAD_PROGRESS_HTML,
+        generated_script=script
+    )
+
+@app.route("/prepare_reel", methods=["POST"])
+def prepare_reel():
+    script = request.form.get("script", "")
     return render_template_string(
         INDEX_HTML,
         upload_progress_html=UPLOAD_PROGRESS_HTML,
