@@ -2970,7 +2970,7 @@ def mux_music(video_path, music_path, output_path):
         flush=True
     )
 
-def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, preset_captions=None):
+def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, preset_captions=None, target_duration_override=None):
     print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
     try:
         script = None
@@ -3034,7 +3034,14 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
-        target_duration = parse_target_duration(topic)
+        if target_duration_override:
+            target_duration = float(target_duration_override)
+            print(
+                f"[JOB {job_id}] target_duration from PROMPT PLAN={target_duration}",
+                flush=True
+            )
+        else:
+            target_duration = parse_target_duration(topic)
         print(f"[JOB {job_id}] target_duration={target_duration}", flush=True)
         print(f"[JOB {job_id}] START RENDER mode={mode}", flush=True)
 
@@ -3150,7 +3157,22 @@ def create_reel_from_prompt():
                 flush=True
             )
 
-            # 2. Ищем и скачиваем визуалы.
+            # 2. Автоматически подбираем бесплатную фоновую музыку
+            # по содержанию промта.
+            music_path = None
+            try:
+                music_path = select_prompt_music(topic)
+                print(
+                    f"[PROMPT MUSIC] selected={music_path}",
+                    flush=True
+                )
+            except Exception as e:
+                print(
+                    f"[PROMPT MUSIC] ERROR: {e}",
+                    flush=True
+                )
+
+            # 3. Ищем и скачиваем визуалы.
             visual_files = prepare_prompt_images(
                 job_dir,
                 scene_plan
@@ -3186,10 +3208,11 @@ def create_reel_from_prompt():
                 job_id,
                 job_dir,
                 media_files,
-                None,
+                music_path,
                 topic,
                 "prompt",
                 preset_captions=prompt_captions,
+                target_duration_override=scene_plan.get("duration"),
             )
 
 
