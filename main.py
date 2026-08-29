@@ -33,6 +33,7 @@ def init_db():
                     id SERIAL PRIMARY KEY,
                     user_key TEXT UNIQUE NOT NULL,
                     videos_balance INTEGER NOT NULL DEFAULT 0,
+                    free_entries_used INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
@@ -66,6 +67,14 @@ def init_db():
                 )
             """)
 
+        # Безопасная миграция существующей базы:
+        # добавляем счётчик бесплатных входов, если его ещё нет.
+        with conn.cursor() as cur:
+            cur.execute("""
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS free_entries_used INTEGER NOT NULL DEFAULT 0
+            """)
+
         conn.commit()
 
 
@@ -78,6 +87,20 @@ def ensure_user(user_key):
                 ON CONFLICT (user_key) DO NOTHING
             """, (user_key,))
         conn.commit()
+
+
+
+def get_or_create_user_by_email(email):
+    email = (email or "").strip().lower()
+
+    if not email:
+        raise ValueError("Email не указан")
+
+    user_key = "email:" + email
+
+    ensure_user(user_key)
+
+    return user_key
 
 
 def get_user_balance(user_key):
@@ -161,6 +184,39 @@ def confirm_payment(payment_id):
         conn.commit()
 
     return True, "Платёж подтверждён"
+
+
+
+def consume_free_entry(user_key):
+    """
+    Атомарно списывает один бесплатный вход пользователя.
+    Возвращает True, если вход успешно списан.
+    """
+    if not user_key:
+        return False
+
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE users
+                SET free_entries_used = free_entries_used + 1
+                WHERE user_key = %s
+                  AND free_entries_used < 3
+                RETURNING free_entries_used
+            """, (user_key,))
+
+            row = cur.fetchone()
+
+        conn.commit()
+
+    if row:
+        print(
+            f"[FREE] consumed user={user_key} count={row[0]}",
+            flush=True
+        )
+        return True
+
+    return False
 
 
 def consume_video(user_key, job_id):
@@ -1067,6 +1123,12 @@ RESULT_HTML = """
 
         {% if script %}
         <div class="script">{{ script }}</div>
+
+        <div class="actions" style="margin-top:20px;">
+            <a class="button download" href="/">
+                🎬 Создать Reels из этого сценария
+            </a>
+        </div>
         {% endif %}
 
     </main>
@@ -1778,6 +1840,14 @@ def create_video():
     if not files:
         return "Загрузи хотя бы одно изображение!", 400
 
+    # Бесплатный вход списывается только после успешной проверки файлов.
+    user_key = request.cookies.get("rf_user_key")
+    if not user_key:
+        return "Требуется email", 401
+
+    if not consume_free_entry(user_key):
+        return redirect("/payment", code=302)
+
     job_id = uuid.uuid4().hex
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
@@ -2094,6 +2164,18 @@ def finish_video_upload():
         flush=True
     )
 
+    # Бесплатный вход списывается только после полной проверки
+    # загруженных видео и непосредственно перед запуском рендера.
+    user_key = request.cookies.get("rf_user_key")
+    if not user_key:
+        return jsonify({"error": "Требуется email"}), 401
+
+    if not consume_free_entry(user_key):
+        return jsonify({
+            "error": "Бесплатные входы закончились",
+            "redirect": "/payment"
+        }), 402
+
     set_job(job_id, status="processing")
 
     t = threading.Thread(
@@ -2232,28 +2314,200 @@ def payment():
 
 @app.route("/admin/reset-free")
 def admin_reset_free():
+    """
+    Сброс бесплатных входов текущего пользователя.
+    Доступ только по ADMIN_RESET_TOKEN.
+    """
     admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
     provided_key = request.args.get("key", "")
 
     if not admin_key or provided_key != admin_key:
         return "Доступ запрещён", 403
 
-    response = redirect("/?access=rf2026free")
-    response.set_cookie(
-        "rf_access_count",
-        "0",
-        max_age=60 * 60 * 24 * 30,
-        httponly=True,
-        samesite="Lax"
-    )
-    response.set_cookie(
-        "rf_access",
-        "rf2026free",
-        max_age=60 * 60 * 24 * 30,
-        httponly=True,
-        samesite="Lax"
-    )
-    return response
+    user_key = request.cookies.get("rf_user_key")
+
+    if not user_key:
+        return "Пользователь не определён", 400
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET free_entries_used = 0
+                    WHERE user_key = %s
+                    RETURNING user_key, free_entries_used
+                """, (user_key,))
+
+                row = cur.fetchone()
+
+            conn.commit()
+
+        if not row:
+            return "Пользователь не найден", 404
+
+        print(
+            f"[ADMIN] free counter reset user={user_key}",
+            flush=True
+        )
+
+        return redirect("/")
+
+    except Exception as e:
+        print(f"[ADMIN] RESET ERROR: {e}", flush=True)
+        return "Ошибка сброса счётчика", 500
+
+
+@app.route("/admin/users")
+def admin_users():
+    """
+    Админский список пользователей.
+    """
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT
+                        id,
+                        user_key,
+                        videos_balance,
+                        free_entries_used,
+                        created_at
+                    FROM users
+                    ORDER BY id DESC
+                """)
+                rows = cur.fetchall()
+
+        html = """
+        <!doctype html>
+        <html lang="ru">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>ReelForge AI — Users</title>
+            <style>
+                body {
+                    background:#07070d;
+                    color:white;
+                    font-family:Arial,sans-serif;
+                    padding:30px;
+                }
+                h1 { margin-bottom:25px; }
+                table {
+                    width:100%;
+                    border-collapse:collapse;
+                    background:#11111a;
+                }
+                th,td {
+                    padding:12px;
+                    border-bottom:1px solid #292936;
+                    text-align:left;
+                }
+                th { color:#a78bfa; }
+                a {
+                    color:#c4b5fd;
+                    text-decoration:none;
+                }
+                .reset {
+                    padding:7px 12px;
+                    border-radius:8px;
+                    background:#7c3aed;
+                    color:white;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>ReelForge AI — Пользователи</h1>
+            <table>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Видео</th>
+                    <th>Free использовано</th>
+                    <th>Дата</th>
+                    <th>Действие</th>
+                </tr>
+                {% for row in rows %}
+                <tr>
+                    <td>{{ row[0] }}</td>
+                    <td>{{ row[1] }}</td>
+                    <td>{{ row[2] }}</td>
+                    <td>{{ row[3] }} / 3</td>
+                    <td>{{ row[4] }}</td>
+                    <td>
+                        <a class="reset"
+                           href="/admin/reset-user?key={{ admin_key }}&user_key={{ row[1] }}">
+                           Сбросить
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </body>
+        </html>
+        """
+
+        return render_template_string(
+            html,
+            rows=rows,
+            admin_key=admin_key
+        )
+
+    except Exception as e:
+        print(f"[ADMIN] USERS ERROR: {e}", flush=True)
+        return "Ошибка загрузки пользователей", 500
+
+
+@app.route("/admin/reset-user")
+def admin_reset_user():
+    """
+    Сброс бесплатного счётчика конкретного пользователя.
+    """
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+    user_key = request.args.get("user_key", "").strip()
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    if not user_key:
+        return "user_key не указан", 400
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET free_entries_used = 0
+                    WHERE user_key = %s
+                    RETURNING user_key
+                """, (user_key,))
+
+                row = cur.fetchone()
+
+            conn.commit()
+
+        if not row:
+            return "Пользователь не найден", 404
+
+        print(
+            f"[ADMIN] reset user={user_key}",
+            flush=True
+        )
+
+        return redirect(
+            "/admin/users?key=" + admin_key
+        )
+
+    except Exception as e:
+        print(f"[ADMIN] RESET USER ERROR: {e}", flush=True)
+        return "Ошибка сброса пользователя", 500
 
 
 @app.route("/collect-email", methods=["GET"])
@@ -2263,7 +2517,12 @@ def collect_email():
     if not email:
         return "Email не указан", 400
 
+    if "@" not in email or "." not in email:
+        return "Введите корректный email", 400
+
     try:
+        user_key = get_or_create_user_by_email(email)
+
         with db_connect() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -2273,13 +2532,50 @@ def collect_email():
                 """, (email,))
             conn.commit()
 
-        print(f"[EMAIL] collected: {email}", flush=True)
+        print(
+            f"[EMAIL] collected email={email} user_key={user_key}",
+            flush=True
+        )
 
     except Exception as e:
         print(f"[EMAIL] ERROR: {e}", flush=True)
         return "Ошибка сохранения email", 500
 
-    return redirect("/")
+    response = redirect("/")
+
+    response.set_cookie(
+        "rf_user_key",
+        user_key,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    response.set_cookie(
+        "rf_email",
+        email,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    response.set_cookie(
+        "rf_access",
+        "rf2026free",
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    response.set_cookie(
+        "rf_access_count",
+        "0",
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        samesite="Lax"
+    )
+
+    return response
 
 
 @app.route("/health")
