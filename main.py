@@ -310,6 +310,305 @@ def get_groq_client():
         _groq_client = Groq(api_key=api_key)
     return _groq_client
 
+
+# ============================================================
+# PROMPT MODE — поиск визуалов через Wikimedia Commons
+# ============================================================
+
+def search_wikimedia_images(query, limit=6):
+    """
+    Ищет изображения в Wikimedia Commons без API-ключа.
+    Возвращает список прямых URL изображений.
+    """
+    import requests
+
+    query = (query or "").strip()
+    if not query:
+        return []
+
+    url = "https://commons.wikimedia.org/w/api.php"
+
+    params = {
+        "action": "query",
+        "generator": "search",
+        "gsrsearch": query,
+        "gsrnamespace": 6,
+        "gsrlimit": min(int(limit), 20),
+        "prop": "imageinfo",
+        "iiprop": "url",
+        "iiurlwidth": 1280,
+        "format": "json",
+        "origin": "*",
+    }
+
+    try:
+        response = requests.get(
+            url,
+            params=params,
+            headers={"User-Agent": "ReelForgeAI/1.0"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        pages = data.get("query", {}).get("pages", {})
+
+        results = []
+        for page in pages.values():
+            imageinfo = page.get("imageinfo", [])
+            if not imageinfo:
+                continue
+
+            info = imageinfo[0]
+            image_url = info.get("thumburl") or info.get("url")
+
+            if image_url:
+                results.append({
+                    "title": page.get("title", ""),
+                    "url": image_url,
+                })
+
+        return results
+
+    except Exception as e:
+        print(f"[PROMPT SEARCH] Wikimedia error: {e}", flush=True)
+        return []
+
+
+
+
+def prepare_prompt_images(job_dir, scene_plan):
+    """
+    Ищет и скачивает визуалы для prompt-mode.
+    Создаёт img000, img001 ... в job_dir.
+    """
+    scenes = scene_plan.get("scenes", [])
+
+    if not scenes:
+        raise RuntimeError("Нет сцен для поиска визуалов")
+
+    downloaded = []
+    used_urls = set()
+
+    for index, scene in enumerate(scenes):
+        query = scene.get("search", "").strip()
+
+        if not query:
+            continue
+
+        print(
+            f"[PROMPT VISUAL] scene={index} search={query}",
+            flush=True
+        )
+
+        results = search_wikimedia_images(query, limit=5)
+
+        selected = None
+
+        for item in results:
+            image_url = item.get("url")
+
+            if image_url and image_url not in used_urls:
+                selected = item
+                break
+
+        if not selected:
+            print(
+                f"[PROMPT VISUAL] no image scene={index}",
+                flush=True
+            )
+            continue
+
+        output_path = os.path.join(
+            job_dir,
+            f"img{len(downloaded):03d}.jpg"
+        )
+
+        try:
+            download_prompt_image(
+                selected["url"],
+                output_path
+            )
+
+            used_urls.add(selected["url"])
+
+            downloaded.append({
+                "path": output_path,
+                "caption": scene.get("caption", ""),
+                "source": selected.get("title", ""),
+                "url": selected["url"],
+            })
+
+            print(
+                f"[PROMPT VISUAL] downloaded={output_path}",
+                flush=True
+            )
+
+        except Exception as e:
+            print(
+                f"[PROMPT VISUAL] download error scene={index}: {e}",
+                flush=True
+            )
+
+    if not downloaded:
+        raise RuntimeError(
+            "Не удалось найти изображения для ролика"
+        )
+
+    print(
+        f"[PROMPT VISUAL] COMPLETE images={len(downloaded)}",
+        flush=True
+    )
+
+    return downloaded
+
+
+def generate_prompt_scene_plan(topic):
+    """
+    Создаёт план сцен для автоматического режима.
+    Возвращает JSON:
+    {
+      "title": "...",
+      "duration": 40,
+      "scenes": [
+        {
+          "caption": "...",
+          "search": "..."
+        }
+      ]
+    }
+    """
+    client = get_groq_client()
+
+    user_prompt = (topic or "").strip()
+    if not user_prompt:
+        raise ValueError("Пустой промт")
+
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {
+                "role": "system",
+                "content": """Ты — режиссёр коротких вертикальных видео ReelForge AI.
+
+Твоя задача — превратить запрос пользователя в план визуального Reels.
+
+Правила:
+1. Строго сохраняй основную тему пользователя.
+2. Если пользователь указал длительность — используй её.
+3. Если длительность не указана — примерно 40 секунд.
+4. Создай 6–10 сцен.
+5. Каждая сцена должна иметь короткий субтитр на русском, максимум 6 слов.
+6. Для каждой сцены создай простой поисковый запрос на английском языке.
+7. Поисковый запрос должен описывать реальный визуальный объект/место/событие.
+8. Не придумывай несуществующие факты.
+9. Не добавляй объяснения.
+10. Верни ТОЛЬКО валидный JSON.
+
+Формат:
+{
+  "title": "название",
+  "duration": 40,
+  "scenes": [
+    {
+      "caption": "короткий субтитр",
+      "search": "English visual search query"
+    }
+  ]
+}"""
+            },
+            {
+                "role": "user",
+                "content": user_prompt
+            }
+        ],
+        max_tokens=1400
+    )
+
+    raw = response.choices[0].message.content.strip()
+
+    # Убираем возможный markdown-блок ```json ... ```
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+
+    try:
+        plan = json.loads(raw)
+    except Exception as e:
+        print(f"[PROMPT PLAN] JSON ERROR: {e}", flush=True)
+        print(f"[PROMPT PLAN] RAW: {raw}", flush=True)
+        raise RuntimeError("AI вернул некорректный план сцен")
+
+    scenes = plan.get("scenes")
+    if not isinstance(scenes, list) or not scenes:
+        raise RuntimeError("AI не создал сцены")
+
+    clean_scenes = []
+
+    for scene in scenes[:12]:
+        if not isinstance(scene, dict):
+            continue
+
+        caption = str(scene.get("caption", "")).strip()
+        search = str(scene.get("search", "")).strip()
+
+        if caption and search:
+            clean_scenes.append({
+                "caption": caption[:160],
+                "search": search[:200],
+            })
+
+    if not clean_scenes:
+        raise RuntimeError("Не удалось получить корректные сцены")
+
+    try:
+        duration = int(plan.get("duration", parse_target_duration(topic)))
+    except Exception:
+        duration = parse_target_duration(topic)
+
+    duration = max(5, min(duration, 180))
+
+    result = {
+        "title": str(plan.get("title", "")).strip()[:200],
+        "duration": duration,
+        "scenes": clean_scenes,
+    }
+
+    print(
+        f"[PROMPT PLAN] scenes={len(clean_scenes)} duration={duration}",
+        flush=True
+    )
+
+    return result
+
+
+def download_prompt_image(url, output_path):
+    """Скачивает найденное изображение для prompt-mode."""
+    import requests
+
+    response = requests.get(
+        url,
+        headers={"User-Agent": "ReelForgeAI/1.0"},
+        timeout=30,
+        stream=True,
+    )
+    response.raise_for_status()
+
+    content_type = response.headers.get("content-type", "").lower()
+    if not content_type.startswith("image/"):
+        raise RuntimeError("URL не содержит изображение")
+
+    with open(output_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024 * 64):
+            if chunk:
+                f.write(chunk)
+
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
+        raise RuntimeError("Изображение скачалось некорректно")
+
+    return output_path
+
+
 def get_font_path():
     global _font_path
     if _font_path is not None:
@@ -510,6 +809,27 @@ input[type=file]::file-selector-button{
     <form action="/generate" method="post">
         <textarea name="topic" placeholder="Например: 5 лайфхаков для продуктивности..."></textarea>
         <button class="btn" type="submit">✨ Сгенерировать сценарий</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>🤖 Reels по промту</h2>
+    <p class="card-desc">
+        Ничего не загружай — просто опиши, какое видео хочешь получить.
+        AI создаст сценарий, найдёт визуалы и соберёт вертикальный Reels.
+    </p>
+
+    <form action="/create_reel_from_prompt" method="post">
+        <label>✨ Что создать?</label>
+        <textarea
+            name="topic"
+            placeholder="Например: Сделай динамичный Reels на 30 секунд про 5 самых красивых мест Японии"
+            required
+        ></textarea>
+
+        <button class="btn" type="submit">
+            🤖 Создать Reels по промту
+        </button>
     </form>
 </div>
 
@@ -1570,6 +1890,7 @@ def parse_video_instructions(topic):
     instructions = {
         "crop_mode": "pad",
         "subtitle_position": "bottom",
+        "effects": [],
     }
 
     crop_patterns = [
@@ -1612,11 +1933,23 @@ def parse_video_instructions(topic):
     elif any(re.search(pattern, text) for pattern in subtitle_bottom_patterns):
         instructions["subtitle_position"] = "bottom"
 
+    # Визуальные эффекты камеры
+    if re.search(r"зум[- ]?ин|zoom[- ]?in|приближ", text):
+        instructions["effects"].append("zoom_in")
+
+    if re.search(r"зум[- ]?аут|zoom[- ]?out|отъезж|отдал", text):
+        instructions["effects"].append("zoom_out")
+
+    if re.search(r"световой всплеск|вспышк|flash", text):
+        instructions["effects"].append("flash")
+
     print(
         "[INSTRUCTIONS] crop_mode="
         + instructions["crop_mode"]
         + " subtitle_position="
-        + instructions["subtitle_position"],
+        + instructions["subtitle_position"]
+        + " effects="
+        + str(instructions["effects"]),
         flush=True,
     )
 
@@ -1659,10 +1992,159 @@ def get_video_duration(path):
     except Exception:
         return 0.0
 
-def extract_auto_clip(src_path, out_path, clip_seconds=4, instructions=None):
+
+def parse_scene_effects(topic, count):
+    """
+    Разбирает сценарий по временным сценам и определяет эффекты
+    отдельно для каждой сцены.
+
+    Например:
+      0:00-0:03 ... зум-ин
+      0:04-0:08 ... зум-аут
+    """
+    text = topic or ""
+    scenes = []
+
+    # Ищем временные интервалы вида 0:00-0:03
+    pattern = re.compile(
+        r'(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})(.*?)(?=\d{1,2}:\d{2}\s*[-–—]\s*\d{1,2}:\d{2}|$)',
+        re.S
+    )
+
+    for m in pattern.finditer(text):
+        start = int(m.group(1)) * 60 + int(m.group(2))
+        end = int(m.group(3)) * 60 + int(m.group(4))
+        desc = m.group(5).lower()
+
+        effects = []
+
+        if re.search(r"зум[- ]?ин|zoom[- ]?in|приближ", desc):
+            effects.append("zoom_in")
+
+        if re.search(r"зум[- ]?аут|zoom[- ]?out|отъезж|отдал", desc):
+            effects.append("zoom_out")
+
+        if re.search(r"световой всплеск|вспышк|flash", desc):
+            effects.append("flash")
+
+        scenes.append({
+            "start": start,
+            "end": end,
+            "effects": effects,
+        })
+
+    # Если временных сцен нет — сохраняем старое поведение.
+    if not scenes:
+        global_effects = []
+        low = text.lower()
+
+        if re.search(r"зум[- ]?ин|zoom[- ]?in|приближ", low):
+            global_effects.append("zoom_in")
+
+        if re.search(r"зум[- ]?аут|zoom[- ]?out|отъезж|отдал", low):
+            global_effects.append("zoom_out")
+
+        if re.search(r"световой всплеск|вспышк|flash", low):
+            global_effects.append("flash")
+
+        return [
+            {"start": 0, "end": 0, "effects": global_effects}
+            for _ in range(count)
+        ]
+
+    # Привязываем сцены к исходным видео.
+    result = []
+
+    for i in range(count):
+        if i < len(scenes):
+            result.append(scenes[i])
+        else:
+            result.append({
+                "start": scenes[-1]["end"],
+                "end": scenes[-1]["end"],
+                "effects": [],
+            })
+
+    print(
+        "[SCENES] " +
+        str(result),
+        flush=True,
+    )
+
+    return result
+
+
+def extract_auto_clip(
+    src_path,
+    out_path,
+    clip_seconds=4,
+    instructions=None,
+    scene_effects=None,
+):
     duration = get_video_duration(src_path)
     if duration <= 0:
         raise RuntimeError(f"Не удалось определить длительность видео: {src_path}")
+
+    if scene_effects is not None:
+        effects = scene_effects
+    else:
+        effects = (instructions or {}).get("effects", [])
+
+    vf_parts = [
+        get_scale_vf((instructions or {}).get("crop_mode", "pad"))
+    ]
+
+    # ========================================================
+    # Последовательные эффекты внутри одного клипа.
+    # Важно: эффекты НЕ применяются одновременно.
+    # Например [zoom_in, zoom_out]:
+    # первая половина -> zoom in
+    # вторая половина -> zoom out
+    # ========================================================
+
+    has_zoom_in = "zoom_in" in effects
+    has_zoom_out = "zoom_out" in effects
+
+    if has_zoom_in and has_zoom_out:
+        vf_parts.append(
+            "zoompan="
+            "z='if(lte(on,frames*0.5),"
+            "min(1+on/(frames*0.5)*0.35,1.35),"
+            "max(1.35-(on-frames*0.5)/(frames*0.5)*0.35,1.0))':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            "d=1:s=720x1280:fps=24"
+        )
+
+    elif has_zoom_in:
+        vf_parts.append(
+            "zoompan="
+            "z='min(zoom+0.002,1.35)':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            "d=1:s=720x1280:fps=24"
+        )
+
+    elif has_zoom_out:
+        vf_parts.append(
+            "zoompan="
+            "z='if(lte(zoom,1.0),1.35,max(zoom-0.002,1.0))':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            "d=1:s=720x1280:fps=24"
+        )
+
+    if "flash" in effects:
+        vf_parts.append(
+            "eq=brightness='if(lt(t,0.35),0.65*(1-t/0.35),0)'"
+        )
+
+    vf = ",".join(vf_parts)
+
+    print(
+        f"[EFFECTS] effects={effects} vf={vf}",
+        flush=True,
+    )
 
     if duration < clip_seconds:
         # Зацикливаем короткое видео до требуемой длительности.
@@ -1673,9 +2155,7 @@ def extract_auto_clip(src_path, out_path, clip_seconds=4, instructions=None):
             "-stream_loop", "-1",
             "-i", src_path,
             "-t", str(length),
-            "-vf", get_scale_vf(
-                (instructions or {}).get("crop_mode", "pad")
-            ),
+            "-vf", vf,
             "-r", "24",
             "-an",
             "-preset", "ultrafast",
@@ -1693,9 +2173,7 @@ def extract_auto_clip(src_path, out_path, clip_seconds=4, instructions=None):
             "-ss", str(start),
             "-i", src_path,
             "-t", str(length),
-            "-vf", get_scale_vf(
-                (instructions or {}).get("crop_mode", "pad")
-            ),
+            "-vf", vf,
             "-r", "24",
             "-an",
             "-preset", "ultrafast",
@@ -1720,13 +2198,32 @@ def build_reel_from_videos(
 
     clip_seconds = max(1, target_duration / max(1, len(video_paths)))
 
+    # Разбираем сценарий на отдельные сцены.
+    scene_data = parse_scene_effects(
+        (instructions or {}).get("_topic", ""),
+        len(video_paths),
+    )
+
     for i, vp in enumerate(video_paths):
         clip_path = os.path.join(clip_dir, f"clip{i:03d}.mp4")
+
+        scene = scene_data[i] if i < len(scene_data) else {}
+        scene_effects = scene.get("effects", [])
+
+        print(
+            f"[SCENE {i}] "
+            f"start={scene.get('start')} "
+            f"end={scene.get('end')} "
+            f"effects={scene_effects}",
+            flush=True,
+        )
+
         extract_auto_clip(
             vp,
             clip_path,
             clip_seconds=clip_seconds,
             instructions=instructions,
+            scene_effects=scene_effects,
         )
         clip_paths.append(clip_path)
 
@@ -1836,12 +2333,13 @@ def mux_music(video_path, music_path, output_path):
         flush=True
     )
 
-def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
+def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, preset_captions=None):
     print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
     try:
         script = None
         captions = None
         instructions = parse_video_instructions(topic)
+        instructions["_topic"] = topic or ""
 
         # AI всегда создаёт сценарий:
         # есть промт -> строго учитывает его;
@@ -1856,8 +2354,15 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode):
             print(f"[AI SCRIPT] ERROR: {e}", flush=True)
             script = None
 
-        # Субтитры строятся только на основе готового AI-сценария.
-        if script:
+        # Для prompt-mode используем субтитры,
+        # которые AI уже создал для конкретных сцен.
+        if preset_captions:
+            captions = list(preset_captions)[:len(files_meta)]
+            print(
+                f"[AI CAPTIONS] using preset count={len(captions)}",
+                flush=True
+            )
+        elif script:
             try:
                 captions = generate_captions(
                     script,
@@ -1939,6 +2444,112 @@ def generate():
         return render_template_string(RESULT_HTML, script=script, video_url=None)
     except Exception as e:
         return f"Ошибка: {str(e)}", 500
+
+
+@app.route("/create_reel_from_prompt", methods=["POST"])
+def create_reel_from_prompt():
+    topic = request.form.get("topic", "").strip()
+
+    if not topic:
+        return "Введи промт для создания Reels!", 400
+
+    # Используем ту же систему доступа/бесплатных генераций,
+    # что и существующие режимы.
+    user_key = request.cookies.get("rf_user_key")
+
+    if not user_key:
+        return "Требуется email", 401
+
+    if not consume_free_entry(user_key):
+        return redirect("/payment", code=302)
+
+    job_id = uuid.uuid4().hex
+    job_dir = os.path.join(UPLOAD_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    set_job(
+        job_id,
+        status="processing",
+        mode="prompt",
+        topic=topic,
+    )
+
+    def run_prompt_job():
+        try:
+            print(
+                f"[PROMPT JOB {job_id}] START topic={topic}",
+                flush=True
+            )
+
+            # 1. AI создаёт план сцен.
+            scene_plan = generate_prompt_scene_plan(topic)
+
+            set_job(
+                job_id,
+                prompt_plan=scene_plan,
+            )
+
+            print(
+                f"[PROMPT JOB {job_id}] PLAN "
+                f"scenes={len(scene_plan.get('scenes', []))} "
+                f"duration={scene_plan.get('duration')}",
+                flush=True
+            )
+
+            # 2. Ищем и скачиваем визуалы.
+            visual_files = prepare_prompt_images(
+                job_dir,
+                scene_plan
+            )
+
+            # 3. Передаём визуалы в уже существующий
+            # проверенный видеодвижок ReelForge.
+            files_meta = visual_files
+
+            preset_captions = [
+                scene.get("caption", "")
+                for scene in scene_plan.get("scenes", [])
+                if scene.get("caption")
+            ]
+
+            process_video_job(
+                job_id,
+                job_dir,
+                files_meta,
+                None,
+                topic,
+                "images",
+                preset_captions=preset_captions,
+            )
+
+        except Exception as e:
+            import traceback
+
+            print(
+                f"[PROMPT JOB {job_id}] ERROR: {e}",
+                flush=True
+            )
+            traceback.print_exc()
+
+            set_job(
+                job_id,
+                status="error",
+                error=str(e),
+            )
+
+    t = threading.Thread(
+        target=run_prompt_job,
+        daemon=True
+    )
+    t.start()
+
+    return render_template_string(
+        PROCESSING_HTML.replace(
+            "</body>",
+            f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'
+        )
+    )
+
 
 @app.route("/create_video", methods=["POST"])
 def create_video():
