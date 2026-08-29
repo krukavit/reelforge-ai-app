@@ -75,6 +75,16 @@ def init_db():
                 ADD COLUMN IF NOT EXISTS free_entries_used INTEGER NOT NULL DEFAULT 0
             """)
 
+            cur.execute("""
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS free_entries_limit INTEGER NOT NULL DEFAULT 3
+            """)
+
+            cur.execute("""
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS unlimited_access BOOLEAN NOT NULL DEFAULT FALSE
+            """)
+
         conn.commit()
 
 
@@ -189,35 +199,57 @@ def confirm_payment(payment_id):
 
 def consume_free_entry(user_key):
     """
-    Атомарно списывает один бесплатный вход пользователя.
-    Возвращает True, если вход успешно списан.
+    Атомарно списывает бесплатный вход пользователя.
+
+    unlimited_access=True:
+        доступ всегда разрешён.
+
+    Иначе:
+        доступ разрешён пока free_entries_used < free_entries_limit.
     """
     if not user_key:
         return False
+
+    ensure_user(user_key)
 
     with db_connect() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE users
-                SET free_entries_used = free_entries_used + 1
+                SET free_entries_used =
+                    CASE
+                        WHEN unlimited_access THEN free_entries_used
+                        ELSE free_entries_used + 1
+                    END
                 WHERE user_key = %s
-                  AND free_entries_used < 3
-                RETURNING free_entries_used
+                  AND (
+                      unlimited_access = TRUE
+                      OR free_entries_used < free_entries_limit
+                  )
+                RETURNING
+                    free_entries_used,
+                    free_entries_limit,
+                    unlimited_access
             """, (user_key,))
 
             row = cur.fetchone()
-
-        conn.commit()
+            conn.commit()
 
     if row:
+        used, limit, unlimited = row
+
         print(
-            f"[FREE] consumed user={user_key} count={row[0]}",
+            f"[FREE] consumed user={user_key} "
+            f"used={used} limit={limit} unlimited={unlimited}",
             flush=True
         )
         return True
 
+    print(
+        f"[FREE] LIMIT REACHED user={user_key}",
+        flush=True
+    )
     return False
-
 
 def consume_video(user_key, job_id):
     ensure_user(user_key)
@@ -3559,7 +3591,7 @@ def admin_reset_free():
 @app.route("/admin/users")
 def admin_users():
     """
-    Админский список пользователей.
+    Полноценная админ-панель пользователей ReelForge AI.
     """
     admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
     provided_key = request.args.get("key", "")
@@ -3567,99 +3599,392 @@ def admin_users():
     if not admin_key or provided_key != admin_key:
         return "Доступ запрещён", 403
 
+    search = (request.args.get("search") or "").strip().lower()
+
     try:
         with db_connect() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT
-                        id,
-                        user_key,
-                        videos_balance,
-                        free_entries_used,
-                        created_at
-                    FROM users
-                    ORDER BY id DESC
-                """)
+                if search:
+                    cur.execute("""
+                        SELECT
+                            id,
+                            user_key,
+                            videos_balance,
+                            free_entries_used,
+                            free_entries_limit,
+                            unlimited_access,
+                            created_at
+                        FROM users
+                        WHERE LOWER(user_key) LIKE %s
+                        ORDER BY id DESC
+                    """, (f"%{search}%",))
+                else:
+                    cur.execute("""
+                        SELECT
+                            id,
+                            user_key,
+                            videos_balance,
+                            free_entries_used,
+                            free_entries_limit,
+                            unlimited_access,
+                            created_at
+                        FROM users
+                        ORDER BY id DESC
+                    """)
+
                 rows = cur.fetchall()
 
         html = """
-        <!doctype html>
-        <html lang="ru">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>ReelForge AI — Users</title>
-            <style>
-                body {
-                    background:#07070d;
-                    color:white;
-                    font-family:Arial,sans-serif;
-                    padding:30px;
-                }
-                h1 { margin-bottom:25px; }
-                table {
-                    width:100%;
-                    border-collapse:collapse;
-                    background:#11111a;
-                }
-                th,td {
-                    padding:12px;
-                    border-bottom:1px solid #292936;
-                    text-align:left;
-                }
-                th { color:#a78bfa; }
-                a {
-                    color:#c4b5fd;
-                    text-decoration:none;
-                }
-                .reset {
-                    padding:7px 12px;
-                    border-radius:8px;
-                    background:#7c3aed;
-                    color:white;
-                }
-            </style>
-        </head>
-        <body>
-            <h1>ReelForge AI — Пользователи</h1>
-            <table>
-                <tr>
-                    <th>ID</th>
-                    <th>User</th>
-                    <th>Видео</th>
-                    <th>Free использовано</th>
-                    <th>Дата</th>
-                    <th>Действие</th>
-                </tr>
-                {% for row in rows %}
-                <tr>
-                    <td>{{ row[0] }}</td>
-                    <td>{{ row[1] }}</td>
-                    <td>{{ row[2] }}</td>
-                    <td>{{ row[3] }} / 3</td>
-                    <td>{{ row[4] }}</td>
-                    <td>
-                        <a class="reset"
-                           href="/admin/reset-user?key={{ admin_key }}&user_key={{ row[1] }}">
-                           Сбросить
-                        </a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </table>
-        </body>
-        </html>
-        """
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>ReelForge AI — Admin</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    background:#07070d;
+    color:#fff;
+    font-family:Arial,sans-serif;
+}
+
+.container{
+    max-width:1200px;
+    margin:auto;
+    padding:25px 16px 50px;
+}
+
+h1{
+    margin:0 0 8px;
+}
+
+.subtitle{
+    color:#999;
+    margin-bottom:25px;
+}
+
+.search{
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
+}
+
+.search input{
+    flex:1;
+    padding:13px 15px;
+    border-radius:10px;
+    border:1px solid #333;
+    background:#11111a;
+    color:white;
+    font-size:15px;
+}
+
+button,.btn{
+    border:0;
+    border-radius:9px;
+    padding:10px 13px;
+    color:white;
+    text-decoration:none;
+    cursor:pointer;
+    display:inline-block;
+    font-size:14px;
+}
+
+.search button{
+    background:#7c3aed;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#11111a;
+    border-radius:14px;
+    overflow:hidden;
+}
+
+th,td{
+    padding:13px 10px;
+    border-bottom:1px solid #292936;
+    text-align:left;
+    vertical-align:middle;
+}
+
+th{
+    color:#a78bfa;
+    font-size:13px;
+}
+
+.email{
+    word-break:break-all;
+}
+
+.actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+}
+
+.plus{
+    background:#2563eb;
+}
+
+.reset{
+    background:#7c3aed;
+}
+
+.on{
+    background:#059669;
+}
+
+.off{
+    background:#dc2626;
+}
+
+.unlimited{
+    color:#34d399;
+    font-weight:bold;
+}
+
+.normal{
+    color:#c4b5fd;
+}
+
+@media(max-width:800px){
+    table{
+        font-size:12px;
+    }
+
+    th,td{
+        padding:9px 6px;
+    }
+
+    .actions{
+        flex-direction:column;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>⚡ ReelForge AI — Админ-панель</h1>
+
+<div class="subtitle">
+Управление бесплатными генерациями и доступом пользователей
+</div>
+
+<form class="search" method="get" action="/admin/users">
+    <input
+        name="key"
+        type="hidden"
+        value="{{ admin_key }}"
+    >
+
+    <input
+        name="search"
+        placeholder="Поиск по email..."
+        value="{{ search }}"
+    >
+
+    <button type="submit">🔎 Найти</button>
+</form>
+
+<table>
+<thead>
+<tr>
+    <th>ID</th>
+    <th>Email / User</th>
+    <th>Оплачено</th>
+    <th>Free</th>
+    <th>Статус</th>
+    <th>Действия</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for row in rows %}
+
+<tr>
+
+<td>{{ row[0] }}</td>
+
+<td class="email">{{ row[1] }}</td>
+
+<td>{{ row[2] }}</td>
+
+<td>
+    {% if row[5] %}
+        <span class="unlimited">∞ Безлимит</span>
+    {% else %}
+        {{ row[3] }} / {{ row[4] }}
+    {% endif %}
+</td>
+
+<td>
+    {% if row[5] %}
+        <span class="unlimited">ACTIVE</span>
+    {% else %}
+        <span class="normal">Обычный</span>
+    {% endif %}
+</td>
+
+<td>
+
+<div class="actions">
+
+<a class="btn plus"
+   href="/admin/add-free?key={{ admin_key }}&user_key={{ row[1] }}&amount=3">
+   +3
+</a>
+
+<a class="btn reset"
+   href="/admin/reset-user?key={{ admin_key }}&user_key={{ row[1] }}">
+   Сброс
+</a>
+
+{% if row[5] %}
+
+<a class="btn off"
+   href="/admin/unlimited?key={{ admin_key }}&user_key={{ row[1] }}&value=0">
+   ∞ Выкл
+</a>
+
+{% else %}
+
+<a class="btn on"
+   href="/admin/unlimited?key={{ admin_key }}&user_key={{ row[1] }}&value=1">
+   ∞ Вкл
+</a>
+
+{% endif %}
+
+</div>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+</table>
+
+</div>
+
+</body>
+</html>
+"""
 
         return render_template_string(
             html,
             rows=rows,
-            admin_key=admin_key
+            admin_key=admin_key,
+            search=search
         )
 
     except Exception as e:
         print(f"[ADMIN] USERS ERROR: {e}", flush=True)
         return "Ошибка загрузки пользователей", 500
+
+
+@app.route("/admin/add-free")
+def admin_add_free():
+    """Добавляет бесплатные генерации пользователю."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+    user_key = request.args.get("user_key", "").strip()
+
+    try:
+        amount = int(request.args.get("amount", "3"))
+    except ValueError:
+        return "Некорректное количество", 400
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    if not user_key:
+        return "user_key не указан", 400
+
+    amount = max(1, min(amount, 1000))
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET free_entries_limit =
+                        free_entries_limit + %s
+                    WHERE user_key = %s
+                    RETURNING user_key, free_entries_limit
+                """, (amount, user_key))
+
+                row = cur.fetchone()
+                conn.commit()
+
+        if not row:
+            return "Пользователь не найден", 404
+
+        print(
+            f"[ADMIN] add_free user={user_key} amount={amount} "
+            f"new_limit={row[1]}",
+            flush=True
+        )
+
+        return redirect("/admin/users?key=" + admin_key)
+
+    except Exception as e:
+        print(f"[ADMIN] ADD FREE ERROR: {e}", flush=True)
+        return "Ошибка добавления бесплатных генераций", 500
+
+
+@app.route("/admin/unlimited")
+def admin_unlimited():
+    """Включает или выключает безлимитный доступ."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+    user_key = request.args.get("user_key", "").strip()
+    value = request.args.get("value", "0") == "1"
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    if not user_key:
+        return "user_key не указан", 400
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET unlimited_access = %s
+                    WHERE user_key = %s
+                    RETURNING user_key, unlimited_access
+                """, (value, user_key))
+
+                row = cur.fetchone()
+                conn.commit()
+
+        if not row:
+            return "Пользователь не найден", 404
+
+        print(
+            f"[ADMIN] unlimited user={user_key} value={value}",
+            flush=True
+        )
+
+        return redirect("/admin/users?key=" + admin_key)
+
+    except Exception as e:
+        print(f"[ADMIN] UNLIMITED ERROR: {e}", flush=True)
+        return "Ошибка изменения доступа", 500
 
 
 @app.route("/admin/reset-user")
