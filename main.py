@@ -1119,7 +1119,7 @@ input[type=file]::file-selector-button{
         AI создаст сценарий, найдёт визуалы и соберёт вертикальный Reels.
     </p>
 
-    <form action="/create_reel_from_prompt" method="post">
+    <form action="/prepare_prompt" method="post">
         <label>✨ Что создать?</label>
         <textarea
             name="topic"
@@ -1128,7 +1128,7 @@ input[type=file]::file-selector-button{
         ></textarea>
 
         <button class="btn" type="submit">
-            🤖 Создать Reels по промту
+            ✨ Подготовить промт
         </button>
     </form>
 </div>
@@ -3147,6 +3147,217 @@ def generate():
         return render_template_string(RESULT_HTML, script=script, video_url=None)
     except Exception as e:
         return f"Ошибка: {str(e)}", 500
+
+
+
+PROMPT_PREVIEW_HTML = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReelForge AI — Подготовка промта</title>
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #07070d;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 760px;
+            margin: 0 auto;
+            padding: 28px 18px 40px;
+        }
+
+        .logo {
+            text-align: center;
+            font-size: 25px;
+            font-weight: 800;
+            margin-bottom: 32px;
+        }
+
+        .logo span {
+            color: #a855f7;
+        }
+
+        .card {
+            background: #111118;
+            border: 1px solid #272733;
+            border-radius: 20px;
+            padding: 22px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 28px;
+        }
+
+        .desc {
+            color: #9ca3af;
+            line-height: 1.5;
+            margin-bottom: 22px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 260px;
+            padding: 15px;
+            border-radius: 14px;
+            border: 1px solid #30303b;
+            background: #08080e;
+            color: #fff;
+            font-size: 16px;
+            line-height: 1.55;
+            resize: vertical;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #a855f7;
+        }
+
+        .button {
+            display: block;
+            width: 100%;
+            margin-top: 14px;
+            padding: 16px 20px;
+            border: 0;
+            border-radius: 13px;
+            background: #a855f7;
+            color: #fff;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .back {
+            background: #1b1b24;
+            border: 1px solid #30303b;
+        }
+
+        .original {
+            margin-top: 20px;
+            padding: 14px;
+            border-radius: 12px;
+            background: #0c0c13;
+            color: #9ca3af;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+<main class="container">
+
+    <div class="logo">ReelForge <span>AI</span></div>
+
+    <div class="card">
+        <h1>✏️ Проверь промт перед созданием</h1>
+
+        <div class="desc">
+            AI подготовил промт для будущего Reels.
+            Ты можешь изменить его перед генерацией.
+            Видео, музыка и визуалы пока не создаются.
+        </div>
+
+        <form action="/create_reel_from_prompt" method="post">
+            <textarea name="topic" required>{{ prepared_prompt }}</textarea>
+
+            <button class="button" type="submit">
+                🎬 Создать Reels
+            </button>
+        </form>
+
+        <form action="/" method="get">
+            <button class="button back" type="submit">
+                ← Изменить исходную идею
+            </button>
+        </form>
+
+        <div class="original">
+            <b>Исходная идея:</b><br>
+            {{ original_topic }}
+        </div>
+    </div>
+
+</main>
+</body>
+</html>
+"""
+
+
+@app.route("/prepare_prompt", methods=["POST"])
+def prepare_prompt():
+    topic = request.form.get("topic", "").strip()
+
+    if not topic:
+        return "Введи идею для создания Reels!", 400
+
+    try:
+        client = get_groq_client()
+
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """Ты — профессиональный режиссёр коротких вертикальных видео ReelForge AI.
+
+Пользователь дал сырую идею для Reels.
+
+Твоя задача — превратить её в один понятный, подробный и редактируемый промт для генерации видео.
+
+Правила:
+1. Сохраняй главную идею пользователя.
+2. Если пользователь указал длительность — сохрани её.
+3. Если длительность не указана — предложи около 40 секунд.
+4. Опиши визуальный стиль, атмосферу, последовательность сцен и динамику монтажа.
+5. Укажи, какие реальные визуалы нужно искать.
+6. Не придумывай несуществующие факты.
+7. Не добавляй голос за кадром, если пользователь этого не просил.
+8. Фоновую музыку можно использовать автоматически.
+9. НЕ добавляй титры, субтитры или текст поверх видео, если пользователь прямо этого не попросил.
+10. Верни только готовый промт, без пояснений и без кавычек.
+
+Промт должен быть написан естественным человеческим языком и готов для дальнейшего редактирования пользователем."""
+                },
+                {
+                    "role": "user",
+                    "content": topic
+                }
+            ],
+            max_tokens=1000
+        )
+
+        prepared_prompt = (
+            response.choices[0].message.content or ""
+        ).strip()
+
+        if not prepared_prompt:
+            raise RuntimeError("AI не создал подготовленный промт")
+
+        print(
+            f"[PROMPT PREVIEW] generated length={len(prepared_prompt)}",
+            flush=True
+        )
+
+        return render_template_string(
+            PROMPT_PREVIEW_HTML,
+            prepared_prompt=prepared_prompt,
+            original_topic=topic
+        )
+
+    except Exception as e:
+        import traceback
+        print(f"[PROMPT PREVIEW] ERROR: {e}", flush=True)
+        traceback.print_exc()
+        return f"Ошибка подготовки промта: {e}", 500
 
 
 @app.route("/create_reel_from_prompt", methods=["POST"])
