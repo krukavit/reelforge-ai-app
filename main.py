@@ -2685,6 +2685,242 @@ def build_reel_from_videos(
         if result2.returncode != 0:
             raise RuntimeError(f"[exit code {result2.returncode}] " + result2.stderr[-1000:])
 
+
+def select_prompt_music(topic=""):
+    """
+    Автоматически выбирает бесплатную музыку из публичного
+    Free To Use API без API key и регистрации.
+    """
+    import requests
+    import os
+    import random
+
+    music_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "static",
+        "music"
+    )
+    os.makedirs(music_dir, exist_ok=True)
+
+    text = (topic or "").lower()
+
+    if any(x in text for x in (
+        "страш", "ужас", "тайн", "мистик",
+        "dark", "horror", "mystery", "scary", "suspense"
+    )):
+        preferred = ["dark", "suspense", "mysterious", "cinematic", "ambient"]
+
+    elif any(x in text for x in (
+        "путеше", "путешеств", "travel", "road",
+        "приключ", "adventure", "nature", "природ"
+    )):
+        preferred = ["travel", "adventure", "cinematic", "nature", "inspiring"]
+
+    elif any(x in text for x in (
+        "мотива", "успех", "спорт", "energy",
+        "motivational", "fitness", "success"
+    )):
+        preferred = ["motivational", "energy", "inspiring", "electronic"]
+
+    elif any(x in text for x in (
+        "груст", "печал", "sad", "emotional",
+        "love", "любов"
+    )):
+        preferred = ["emotional", "piano", "sad", "calm"]
+
+    elif any(x in text for x in (
+        "спокой", "релакс", "медита", "calm",
+        "relax", "meditation"
+    )):
+        preferred = ["calm", "ambient", "relaxing", "piano"]
+
+    elif any(x in text for x in (
+        "эпич", "герой", "войн", "epic",
+        "hero", "cinematic"
+    )):
+        preferred = ["epic", "cinematic", "dramatic", "inspiring"]
+
+    else:
+        preferred = ["inspiring", "cinematic", "ambient", "electronic"]
+
+    print(
+        f"[PROMPT MUSIC] preferred={preferred}",
+        flush=True
+    )
+
+    api_url = "https://api.freetouse.com/v3/music/tracks/all"
+
+    try:
+        response = requests.get(
+            api_url,
+            params={
+                "limit": 50,
+                "order": "random"
+            },
+            timeout=20
+        )
+
+        response.raise_for_status()
+
+        payload = response.json()
+
+        tracks = payload.get("data", [])
+
+        print(
+            f"[PROMPT MUSIC] API tracks={len(tracks)}",
+            flush=True
+        )
+
+        # Только бесплатные треки с MP3.
+        free_tracks = [
+            track for track in tracks
+            if not track.get("is_premium", True)
+            and track.get("files", {}).get("mp3")
+        ]
+
+        print(
+            f"[PROMPT MUSIC] free tracks={len(free_tracks)}",
+            flush=True
+        )
+
+        if not free_tracks:
+            print(
+                "[PROMPT MUSIC] no free tracks",
+                flush=True
+            )
+            return None
+
+        # Сначала пытаемся подобрать трек по жанру/тегам.
+        scored = []
+
+        for track in free_tracks:
+            text_parts = [
+                str(track.get("title", "")),
+                str(track.get("genre", "")),
+                str(track.get("lyrics", "")),
+            ]
+
+            for item in track.get("tags", []) or []:
+                text_parts.append(str(item))
+
+            for item in track.get("categories", []) or []:
+                if isinstance(item, dict):
+                    text_parts.append(str(item.get("name", "")))
+                else:
+                    text_parts.append(str(item))
+
+            haystack = " ".join(text_parts).lower()
+
+            score = 0
+
+            for word in preferred:
+                if word.lower() in haystack:
+                    score += 3
+
+            scored.append((score, track))
+
+        scored.sort(
+            key=lambda x: x[0],
+            reverse=True
+        )
+
+        best_score = scored[0][0]
+
+        if best_score > 0:
+            candidates = [
+                track
+                for score, track in scored
+                if score == best_score
+            ]
+            track = random.choice(candidates)
+        else:
+            track = random.choice(free_tracks)
+
+        title = str(
+            track.get("title", "background_music")
+        )
+
+        track_id = str(
+            track.get("id", "unknown")
+        )
+
+        mp3_url = track.get(
+            "files", {}
+        ).get("mp3")
+
+        if not mp3_url:
+            print(
+                "[PROMPT MUSIC] selected track has no mp3",
+                flush=True
+            )
+            return None
+
+        safe_name = re.sub(
+            r"[^a-zA-Z0-9_-]+",
+            "_",
+            title
+        ).strip("_")[:60] or "background_music"
+
+        music_path = os.path.join(
+            music_dir,
+            f"{safe_name}_{track_id}.mp3"
+        )
+
+        # Используем уже скачанный файл.
+        if (
+            os.path.exists(music_path)
+            and os.path.getsize(music_path) > 10000
+        ):
+            print(
+                f"[PROMPT MUSIC] cached={music_path}",
+                flush=True
+            )
+            return music_path
+
+        print(
+            f"[PROMPT MUSIC] downloading "
+            f"title={title} "
+            f"genre={track.get('genre')} "
+            f"score={best_score}",
+            flush=True
+        )
+
+        audio = requests.get(
+            mp3_url,
+            timeout=60
+        )
+
+        audio.raise_for_status()
+
+        with open(music_path, "wb") as f:
+            f.write(audio.content)
+
+        size = os.path.getsize(music_path)
+
+        if size < 10000:
+            os.remove(music_path)
+            raise RuntimeError(
+                "Downloaded music file is too small"
+            )
+
+        print(
+            f"[PROMPT MUSIC] COMPLETE "
+            f"title={title} "
+            f"size={size} "
+            f"artist={track.get('artists')}",
+            flush=True
+        )
+
+        return music_path
+
+    except Exception as e:
+        print(
+            f"[PROMPT MUSIC] ERROR: {e}",
+            flush=True
+        )
+        return None
+
+
 def mux_music(video_path, music_path, output_path):
     if not os.path.exists(video_path):
         raise RuntimeError(f"VIDEO NOT FOUND: {video_path}")
@@ -2742,10 +2978,9 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
         instructions = parse_video_instructions(topic)
         instructions["_topic"] = topic or ""
 
-        # В PROMPT MODE субтитры НЕ добавляем автоматически.
-        # Они появятся только если пользователь явно попросит их.
+        # В PROMPT MODE используем субтитры,
+        # которые были созданы AI для сцен.
         if mode == "prompt":
-            preset_captions = None
             instructions["_prompt_mode"] = True
 
         # AI всегда создаёт сценарий:
@@ -2761,12 +2996,18 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
             print(f"[AI SCRIPT] ERROR: {e}", flush=True)
             script = None
 
-        # Для prompt-mode используем субтитры,
-        # которые AI уже создал для конкретных сцен.
-        if mode == "prompt":
-            captions = None
+        # В PROMPT MODE используем captions,
+        # переданные из AI-плана сцен.
+        if mode == "prompt" and preset_captions:
+            captions = list(preset_captions)
             print(
-                "[AI CAPTIONS] PROMPT MODE captions disabled",
+                f"[AI CAPTIONS] PROMPT MODE captions count={len(captions)}",
+                flush=True
+            )
+        elif mode == "prompt":
+            captions = []
+            print(
+                "[AI CAPTIONS] PROMPT MODE no captions received",
                 flush=True
             )
         elif preset_captions:
@@ -2931,6 +3172,16 @@ def create_reel_from_prompt():
                 flush=True
             )
 
+            prompt_captions = [
+                scene.get("caption", "")
+                for scene in scene_plan.get("scenes", [])
+            ]
+
+            print(
+                f"[PROMPT CAPTIONS] prepared count={len(prompt_captions)}",
+                flush=True
+            )
+
             process_video_job(
                 job_id,
                 job_dir,
@@ -2938,7 +3189,7 @@ def create_reel_from_prompt():
                 None,
                 topic,
                 "prompt",
-                preset_captions=None,
+                preset_captions=prompt_captions,
             )
 
 
