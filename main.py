@@ -380,7 +380,9 @@ def search_wikimedia_images(query, limit=6):
 def prepare_prompt_images(job_dir, scene_plan):
     """
     Ищет и скачивает визуалы для prompt-mode.
-    Создаёт img000, img001 ... в job_dir.
+
+    Для каждой сцены получает несколько результатов Wikimedia
+    и пробует их по очереди. Один 429/ошибка не ломает весь ролик.
     """
     scenes = scene_plan.get("scenes", [])
 
@@ -391,7 +393,7 @@ def prepare_prompt_images(job_dir, scene_plan):
     used_urls = set()
 
     for index, scene in enumerate(scenes):
-        query = scene.get("search", "").strip()
+        query = str(scene.get("search", "")).strip()
 
         if not query:
             continue
@@ -401,54 +403,82 @@ def prepare_prompt_images(job_dir, scene_plan):
             flush=True
         )
 
-        results = search_wikimedia_images(query, limit=5)
+        results = search_wikimedia_images(query, limit=8)
 
-        selected = None
-
-        for item in results:
-            image_url = item.get("url")
-
-            if image_url and image_url not in used_urls:
-                selected = item
-                break
-
-        if not selected:
+        if not results:
             print(
-                f"[PROMPT VISUAL] no image scene={index}",
+                f"[PROMPT VISUAL] no search results scene={index}",
                 flush=True
             )
             continue
 
-        output_path = os.path.join(
-            job_dir,
-            f"img{len(downloaded):03d}.jpg"
+        selected = None
+        output_path = None
+
+        for candidate_no, item in enumerate(results, start=1):
+            image_url = item.get("url")
+
+            if not image_url:
+                continue
+
+            if image_url in used_urls:
+                continue
+
+            candidate_path = os.path.join(
+                job_dir,
+                f"img{len(downloaded):03d}.jpg"
+            )
+
+            print(
+                f"[PROMPT VISUAL] try scene={index} "
+                f"candidate={candidate_no}/{len(results)}",
+                flush=True
+            )
+
+            try:
+                download_prompt_image(
+                    image_url,
+                    candidate_path
+                )
+
+                selected = item
+                output_path = candidate_path
+                break
+
+            except Exception as e:
+                print(
+                    f"[PROMPT VISUAL] candidate failed "
+                    f"scene={index} candidate={candidate_no}: {e}",
+                    flush=True
+                )
+
+                try:
+                    if os.path.exists(candidate_path):
+                        os.remove(candidate_path)
+                except Exception:
+                    pass
+
+        if not selected:
+            print(
+                f"[PROMPT VISUAL] all candidates failed "
+                f"scene={index}",
+                flush=True
+            )
+            continue
+
+        used_urls.add(selected["url"])
+
+        downloaded.append({
+            "path": output_path,
+            "caption": scene.get("caption", ""),
+            "source": selected.get("title", ""),
+            "url": selected["url"],
+        })
+
+        print(
+            f"[PROMPT VISUAL] downloaded={output_path}",
+            flush=True
         )
-
-        try:
-            download_prompt_image(
-                selected["url"],
-                output_path
-            )
-
-            used_urls.add(selected["url"])
-
-            downloaded.append({
-                "path": output_path,
-                "caption": scene.get("caption", ""),
-                "source": selected.get("title", ""),
-                "url": selected["url"],
-            })
-
-            print(
-                f"[PROMPT VISUAL] downloaded={output_path}",
-                flush=True
-            )
-
-        except Exception as e:
-            print(
-                f"[PROMPT VISUAL] download error scene={index}: {e}",
-                flush=True
-            )
 
     if not downloaded:
         raise RuntimeError(
@@ -461,6 +491,7 @@ def prepare_prompt_images(job_dir, scene_plan):
     )
 
     return downloaded
+
 
 
 def generate_prompt_scene_plan(topic):
@@ -583,30 +614,94 @@ def generate_prompt_scene_plan(topic):
 
 
 def download_prompt_image(url, output_path):
-    """Скачивает найденное изображение для prompt-mode."""
+    """
+    Надёжная загрузка изображения для prompt-mode.
+    Wikimedia может временно отвечать 429.
+    """
     import requests
+    import time
 
-    response = requests.get(
-        url,
-        headers={"User-Agent": "ReelForgeAI/1.0"},
-        timeout=30,
-        stream=True,
+    headers = {
+        "User-Agent": (
+            "ReelForgeAI/1.0 "
+            "(https://reelforge-landing-steel.vercel.app/; "
+            "ReelForgeAI image fetcher)"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/jpeg,image/png,*/*",
+    }
+
+    last_error = None
+
+    for attempt in range(3):
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=30,
+                stream=True,
+            )
+
+            if response.status_code == 429:
+                retry_after = response.headers.get("Retry-After", "5")
+
+                try:
+                    wait = min(int(retry_after), 20)
+                except Exception:
+                    wait = 5
+
+                print(
+                    f"[PROMPT DOWNLOAD] 429 attempt={attempt + 1}/3 "
+                    f"wait={wait}s",
+                    flush=True,
+                )
+
+                response.close()
+                time.sleep(wait)
+                continue
+
+            response.raise_for_status()
+
+            content_type = (
+                response.headers.get("content-type", "")
+                .lower()
+            )
+
+            if not content_type.startswith("image/"):
+                raise RuntimeError(
+                    f"URL не содержит изображение: {content_type}"
+                )
+
+            with open(output_path, "wb") as f:
+                for chunk in response.iter_content(
+                    chunk_size=64 * 1024
+                ):
+                    if chunk:
+                        f.write(chunk)
+
+            if (
+                not os.path.exists(output_path)
+                or os.path.getsize(output_path) < 1000
+            ):
+                raise RuntimeError(
+                    "Изображение скачалось некорректно"
+                )
+
+            return output_path
+
+        except Exception as e:
+            last_error = e
+
+            print(
+                f"[PROMPT DOWNLOAD] error attempt={attempt + 1}/3: {e}",
+                flush=True,
+            )
+
+            if attempt < 2:
+                time.sleep(2)
+
+    raise RuntimeError(
+        f"Не удалось скачать изображение: {last_error}"
     )
-    response.raise_for_status()
-
-    content_type = response.headers.get("content-type", "").lower()
-    if not content_type.startswith("image/"):
-        raise RuntimeError("URL не содержит изображение")
-
-    with open(output_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=1024 * 64):
-            if chunk:
-                f.write(chunk)
-
-    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
-        raise RuntimeError("Изображение скачалось некорректно")
-
-    return output_path
 
 
 def get_font_path():
