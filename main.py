@@ -2983,54 +2983,52 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
         if mode == "prompt":
             instructions["_prompt_mode"] = True
 
-        # AI всегда создаёт сценарий:
-        # есть промт -> строго учитывает его;
-        # пустой промт -> работает полностью автоматически.
-        try:
-            script = generate_script(topic)
-            print(
-                f"[AI SCRIPT] generated length={len(script or '')}",
-                flush=True
-            )
-        except Exception as e:
-            print(f"[AI SCRIPT] ERROR: {e}", flush=True)
+        # PROMPT MODE:
+        # не генерируем отдельный сценарий и НЕ добавляем титры.
+        # Пользовательский промт используется как основа для
+        # плана сцен, визуалов, музыки и монтажа.
+        if mode == "prompt":
             script = None
-
-        # В PROMPT MODE используем captions,
-        # переданные из AI-плана сцен.
-        if mode == "prompt" and preset_captions:
-            captions = list(preset_captions)
-            print(
-                f"[AI CAPTIONS] PROMPT MODE captions count={len(captions)}",
-                flush=True
-            )
-        elif mode == "prompt":
             captions = []
             print(
-                "[AI CAPTIONS] PROMPT MODE no captions received",
+                "[AI CAPTIONS] PROMPT MODE captions DISABLED",
                 flush=True
             )
-        elif preset_captions:
-            captions = list(preset_captions)[:len(files_meta)]
-            print(
-                f"[AI CAPTIONS] using preset count={len(captions)}",
-                flush=True
-            )
-        elif script:
+
+        # Остальные режимы работают по старой логике.
+        else:
+            # AI создаёт сценарий.
             try:
-                captions = generate_captions(
-                    script,
-                    len(files_meta)
-                )
+                script = generate_script(topic)
                 print(
-                    f"[AI CAPTIONS] generated count={len(captions or [])}",
+                    f"[AI SCRIPT] generated length={len(script or '')}",
                     flush=True
                 )
             except Exception as e:
-                print(f"[AI CAPTIONS] ERROR: {e}", flush=True)
+                print(f"[AI SCRIPT] ERROR: {e}", flush=True)
+                script = None
+
+            if preset_captions:
+                captions = list(preset_captions)[:len(files_meta)]
+                print(
+                    f"[AI CAPTIONS] using preset count={len(captions)}",
+                    flush=True
+                )
+            elif script:
+                try:
+                    captions = generate_captions(
+                        script,
+                        len(files_meta)
+                    )
+                    print(
+                        f"[AI CAPTIONS] generated count={len(captions or [])}",
+                        flush=True
+                    )
+                except Exception as e:
+                    print(f"[AI CAPTIONS] ERROR: {e}", flush=True)
+                    captions = []
+            else:
                 captions = []
-        else:
-            captions = []
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
@@ -3194,15 +3192,8 @@ def create_reel_from_prompt():
                 flush=True
             )
 
-            prompt_captions = [
-                scene.get("caption", "")
-                for scene in scene_plan.get("scenes", [])
-            ]
-
-            print(
-                f"[PROMPT CAPTIONS] prepared count={len(prompt_captions)}",
-                flush=True
-            )
+            # PROMPT MODE: титры не используются.
+            # AI-план отвечает только за визуалы, длительность и монтаж.
 
             process_video_job(
                 job_id,
@@ -3211,7 +3202,7 @@ def create_reel_from_prompt():
                 music_path,
                 topic,
                 "prompt",
-                preset_captions=prompt_captions,
+                preset_captions=None,
                 target_duration_override=scene_plan.get("duration"),
             )
 
