@@ -312,6 +312,132 @@ def get_groq_client():
 
 
 # ============================================================
+
+# ============================================================
+# PEXELS — визуалы для PROMPT MODE
+# ============================================================
+
+def search_pexels_media(query, per_page=8):
+    """
+    Ищет видео и фотографии Pexels по запросу.
+    Видео возвращаются первыми, затем фотографии.
+    """
+    import requests
+
+    api_key = os.getenv("PEXELS_API_KEY", "").strip()
+
+    if not api_key:
+        raise RuntimeError("PEXELS_API_KEY не установлен")
+
+    query = (query or "").strip()
+    if not query:
+        return []
+
+    headers = {
+        "Authorization": api_key,
+        "User-Agent": "ReelForgeAI/1.0",
+    }
+
+    results = []
+
+    try:
+        # Сначала видео
+        video_response = requests.get(
+            "https://api.pexels.com/videos/search",
+            headers=headers,
+            params={
+                "query": query,
+                "per_page": per_page,
+                "orientation": "portrait",
+            },
+            timeout=20,
+        )
+
+        video_response.raise_for_status()
+        video_data = video_response.json()
+
+        for video in video_data.get("videos", []):
+            files = video.get("video_files", [])
+
+            # Предпочитаем вертикальные HD-файлы
+            candidates = sorted(
+                files,
+                key=lambda x: (
+                    0 if x.get("width", 0) < x.get("height", 0) else 1,
+                    abs((x.get("width", 0) or 1) - 720),
+                )
+            )
+
+            selected = None
+
+            for vf in candidates:
+                link = vf.get("link")
+                width = vf.get("width", 0)
+                height = vf.get("height", 0)
+
+                if link and width and height:
+                    selected = vf
+                    break
+
+            if selected:
+                results.append({
+                    "type": "video",
+                    "url": selected["link"],
+                    "width": selected.get("width", 0),
+                    "height": selected.get("height", 0),
+                    "title": query,
+                    "source": "Pexels",
+                    "page": video.get("url", ""),
+                })
+
+        # Затем фото как fallback
+        photo_response = requests.get(
+            "https://api.pexels.com/v1/search",
+            headers=headers,
+            params={
+                "query": query,
+                "per_page": per_page,
+                "orientation": "portrait",
+            },
+            timeout=20,
+        )
+
+        photo_response.raise_for_status()
+        photo_data = photo_response.json()
+
+        for photo in photo_data.get("photos", []):
+            src = photo.get("src", {})
+            image_url = (
+                src.get("large2x")
+                or src.get("large")
+                or src.get("original")
+            )
+
+            if image_url:
+                results.append({
+                    "type": "image",
+                    "url": image_url,
+                    "width": photo.get("width", 0),
+                    "height": photo.get("height", 0),
+                    "title": query,
+                    "source": "Pexels",
+                    "page": photo.get("url", ""),
+                })
+
+        print(
+            f"[PEXELS SEARCH] query={query} "
+            f"videos={sum(1 for x in results if x['type'] == 'video')} "
+            f"images={sum(1 for x in results if x['type'] == 'image')}",
+            flush=True,
+        )
+
+        return results
+
+    except Exception as e:
+        print(f"[PEXELS SEARCH] error query={query}: {e}", flush=True)
+        return []
+
+
 # PROMPT MODE — поиск визуалов через Wikimedia Commons
 # ============================================================
 
@@ -377,13 +503,50 @@ def search_wikimedia_images(query, limit=6):
 
 
 
+def download_pexels_media(url, output_path):
+    """
+    Скачивает медиафайл Pexels.
+    """
+    import requests
+
+    headers = {
+        "User-Agent": "ReelForgeAI/1.0",
+    }
+
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=60,
+        stream=True,
+    )
+    response.raise_for_status()
+
+    with open(output_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                f.write(chunk)
+
+    if not os.path.exists(output_path):
+        raise RuntimeError("Pexels файл не создан")
+
+    if os.path.getsize(output_path) < 1000:
+        raise RuntimeError("Pexels файл слишком маленький")
+
+    return output_path
+
+
 def prepare_prompt_images(job_dir, scene_plan):
     """
-    Ищет и скачивает визуалы для prompt-mode.
+    PROMPT MODE:
+    Для каждой AI-сцены ищем Pexels.
+    Видео имеют приоритет, фото используются как fallback.
 
-    Для каждой сцены получает несколько результатов Wikimedia
-    и пробует их по очереди. Один 429/ошибка не ломает весь ролик.
+    Важно:
+    - Wikimedia не используется.
+    - Каждый визуал выбирается отдельно для своей сцены.
+    - Сохраняем информацию о типе media для дальнейшего монтажа.
     """
+
     scenes = scene_plan.get("scenes", [])
 
     if not scenes:
@@ -399,15 +562,15 @@ def prepare_prompt_images(job_dir, scene_plan):
             continue
 
         print(
-            f"[PROMPT VISUAL] scene={index} search={query}",
+            f"[PEXELS VISUAL] scene={index} search={query}",
             flush=True
         )
 
-        results = search_wikimedia_images(query, limit=8)
+        results = search_pexels_media(query, per_page=8)
 
         if not results:
             print(
-                f"[PROMPT VISUAL] no search results scene={index}",
+                f"[PEXELS VISUAL] no results scene={index}",
                 flush=True
             )
             continue
@@ -415,29 +578,34 @@ def prepare_prompt_images(job_dir, scene_plan):
         selected = None
         output_path = None
 
+        # Видео идут первыми.
+        # Если видео не скачивается — пробуем следующее.
+        # После видео используем изображения.
         for candidate_no, item in enumerate(results, start=1):
-            image_url = item.get("url")
+            media_url = item.get("url")
 
-            if not image_url:
+            if not media_url or media_url in used_urls:
                 continue
 
-            if image_url in used_urls:
-                continue
+            media_type = item.get("type", "image")
+
+            extension = ".mp4" if media_type == "video" else ".jpg"
 
             candidate_path = os.path.join(
                 job_dir,
-                f"img{len(downloaded):03d}.jpg"
+                f"media{len(downloaded):03d}{extension}"
             )
 
             print(
-                f"[PROMPT VISUAL] try scene={index} "
-                f"candidate={candidate_no}/{len(results)}",
+                f"[PEXELS VISUAL] try scene={index} "
+                f"candidate={candidate_no}/{len(results)} "
+                f"type={media_type}",
                 flush=True
             )
 
             try:
-                download_prompt_image(
-                    image_url,
+                download_pexels_media(
+                    media_url,
                     candidate_path
                 )
 
@@ -447,7 +615,7 @@ def prepare_prompt_images(job_dir, scene_plan):
 
             except Exception as e:
                 print(
-                    f"[PROMPT VISUAL] candidate failed "
+                    f"[PEXELS VISUAL] candidate failed "
                     f"scene={index} candidate={candidate_no}: {e}",
                     flush=True
                 )
@@ -460,7 +628,7 @@ def prepare_prompt_images(job_dir, scene_plan):
 
         if not selected:
             print(
-                f"[PROMPT VISUAL] all candidates failed "
+                f"[PEXELS VISUAL] all candidates failed "
                 f"scene={index}",
                 flush=True
             )
@@ -469,36 +637,35 @@ def prepare_prompt_images(job_dir, scene_plan):
         used_urls.add(selected["url"])
 
         print(
-            f"[PROMPT VISUAL] SELECTED scene={index} "
-            f"title={selected.get('title', '')} "
-            f"url={selected.get('url', '')}",
+            f"[PEXELS VISUAL] SELECTED scene={index} "
+            f"type={selected.get('type')} "
+            f"title={selected.get('title', '')}",
             flush=True
         )
 
         downloaded.append({
             "path": output_path,
             "caption": scene.get("caption", ""),
-            "source": selected.get("title", ""),
-            "url": selected["url"],
+            "source": "Pexels",
+            "url": selected.get("url", ""),
+            "type": selected.get("type", "image"),
+            "scene_index": index,
+            "search": query,
         })
-
-        print(
-            f"[PROMPT VISUAL] downloaded={output_path}",
-            flush=True
-        )
 
     if not downloaded:
         raise RuntimeError(
-            "Не удалось найти изображения для ролика"
+            "Не удалось найти визуалы Pexels для ролика"
         )
 
     print(
-        f"[PROMPT VISUAL] COMPLETE images={len(downloaded)}",
+        f"[PEXELS VISUAL] COMPLETE media={len(downloaded)} "
+        f"videos={sum(1 for x in downloaded if x.get('type') == 'video')} "
+        f"images={sum(1 for x in downloaded if x.get('type') == 'image')}",
         flush=True
     )
 
     return downloaded
-
 
 
 def generate_prompt_scene_plan(topic):
@@ -2183,26 +2350,114 @@ def extract_auto_clip(
     instructions=None,
     scene_effects=None,
 ):
-    duration = get_video_duration(src_path)
-    if duration <= 0:
-        raise RuntimeError(f"Не удалось определить длительность видео: {src_path}")
+    """
+    Универсальный клип для PROMPT AUTO MIX.
 
-    if scene_effects is not None:
-        effects = scene_effects
-    else:
-        effects = (instructions or {}).get("effects", [])
+    Поддерживает:
+    - MP4/MOV/WebM и другие видео;
+    - JPG/JPEG/PNG/WebP изображения.
+
+    Изображение превращается в вертикальный видеоклип
+    с плавным zoom-in/zoom-out.
+    """
+
+    instructions = instructions or {}
+
+    effects = (
+        scene_effects
+        if scene_effects is not None
+        else instructions.get("effects", [])
+    )
+
+    ext = os.path.splitext(src_path)[1].lower()
+
+    # ============================================================
+    # IMAGE -> VIDEO
+    # ============================================================
+
+    if ext in (".jpg", ".jpeg", ".png", ".webp", ".avif"):
+
+        vf_parts = [
+            get_scale_vf(instructions.get("crop_mode", "pad"))
+        ]
+
+        # Плавное движение по изображению.
+        if "zoom_out" in effects and "zoom_in" not in effects:
+            zoom_expr = (
+                "if(lte(on,1),1.30,"
+                "max(1.30-0.30*on/(24*"
+                f"{clip_seconds}),1.0))"
+            )
+        else:
+            zoom_expr = (
+                "min(1.0+0.30*on/(24*"
+                f"{clip_seconds}),1.30)"
+            )
+
+        vf_parts.append(
+            "zoompan="
+            f"z='{zoom_expr}':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            f"d=1:s=720x1280:fps=24"
+        )
+
+        if "flash" in effects:
+            vf_parts.append(
+                "eq=brightness='if(lt(t,0.35),"
+                "0.65*(1-t/0.35),0)'"
+            )
+
+        vf = ",".join(vf_parts)
+
+        print(
+            f"[IMAGE CLIP] src={src_path} duration={clip_seconds} "
+            f"effects={effects}",
+            flush=True,
+        )
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-loop", "1",
+            "-i", src_path,
+            "-t", str(clip_seconds),
+            "-vf", vf,
+            "-r", "24",
+            "-an",
+            "-preset", "ultrafast",
+            "-threads", "1",
+            "-pix_fmt", "yuv420p",
+            out_path,
+        ]
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"[IMAGE CLIP exit code {result.returncode}] "
+                + result.stderr[-1500:]
+            )
+
+        return clip_seconds
+
+    # ============================================================
+    # VIDEO -> VIDEO
+    # ============================================================
+
+    duration = get_video_duration(src_path)
+
+    if duration <= 0:
+        raise RuntimeError(
+            f"Не удалось определить длительность видео: {src_path}"
+        )
 
     vf_parts = [
-        get_scale_vf((instructions or {}).get("crop_mode", "pad"))
+        get_scale_vf(instructions.get("crop_mode", "pad"))
     ]
-
-    # ========================================================
-    # Последовательные эффекты внутри одного клипа.
-    # Важно: эффекты НЕ применяются одновременно.
-    # Например [zoom_in, zoom_out]:
-    # первая половина -> zoom in
-    # вторая половина -> zoom out
-    # ========================================================
 
     has_zoom_in = "zoom_in" in effects
     has_zoom_out = "zoom_out" in effects
@@ -2230,7 +2485,8 @@ def extract_auto_clip(
     elif has_zoom_out:
         vf_parts.append(
             "zoompan="
-            "z='if(lte(zoom,1.0),1.35,max(zoom-0.002,1.0))':"
+            "z='if(lte(zoom,1.0),1.35,"
+            "max(zoom-0.002,1.0))':"
             "x='iw/2-(iw/zoom/2)':"
             "y='ih/2-(ih/zoom/2)':"
             "d=1:s=720x1280:fps=24"
@@ -2238,55 +2494,66 @@ def extract_auto_clip(
 
     if "flash" in effects:
         vf_parts.append(
-            "eq=brightness='if(lt(t,0.35),0.65*(1-t/0.35),0)'"
+            "eq=brightness='if(lt(t,0.35),"
+            "0.65*(1-t/0.35),0)'"
         )
 
     vf = ",".join(vf_parts)
 
     print(
-        f"[EFFECTS] effects={effects} vf={vf}",
+        f"[VIDEO CLIP] src={src_path} duration={clip_seconds} "
+        f"effects={effects}",
         flush=True,
     )
 
     if duration < clip_seconds:
-        # Зацикливаем короткое видео до требуемой длительности.
-        start = 0
-        length = clip_seconds
         cmd = [
             "ffmpeg", "-y",
             "-stream_loop", "-1",
             "-i", src_path,
-            "-t", str(length),
+            "-t", str(clip_seconds),
             "-vf", vf,
             "-r", "24",
             "-an",
             "-preset", "ultrafast",
             "-threads", "1",
-            out_path
+            "-pix_fmt", "yuv420p",
+            out_path,
         ]
     else:
         start = duration * 0.2
+
         if start + clip_seconds > duration:
             start = max(0, duration - clip_seconds)
-        length = clip_seconds
 
         cmd = [
             "ffmpeg", "-y",
             "-ss", str(start),
             "-i", src_path,
-            "-t", str(length),
+            "-t", str(clip_seconds),
             "-vf", vf,
             "-r", "24",
             "-an",
             "-preset", "ultrafast",
             "-threads", "1",
-            out_path
+            "-pix_fmt", "yuv420p",
+            out_path,
         ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+    )
+
     if result.returncode != 0:
-        raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
-    return length
+        raise RuntimeError(
+            f"[VIDEO CLIP exit code {result.returncode}] "
+            + result.stderr[-1500:]
+        )
+
+    return clip_seconds
+
 
 def build_reel_from_videos(
     video_paths,
@@ -2443,6 +2710,12 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
         instructions = parse_video_instructions(topic)
         instructions["_topic"] = topic or ""
 
+        # В PROMPT MODE субтитры НЕ добавляем автоматически.
+        # Они появятся только если пользователь явно попросит их.
+        if mode == "prompt":
+            preset_captions = None
+            instructions["_prompt_mode"] = True
+
         # AI всегда создаёт сценарий:
         # есть промт -> строго учитывает его;
         # пустой промт -> работает полностью автоматически.
@@ -2458,7 +2731,13 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
 
         # Для prompt-mode используем субтитры,
         # которые AI уже создал для конкретных сцен.
-        if preset_captions:
+        if mode == "prompt":
+            captions = None
+            print(
+                "[AI CAPTIONS] PROMPT MODE captions disabled",
+                flush=True
+            )
+        elif preset_captions:
             captions = list(preset_captions)[:len(files_meta)]
             print(
                 f"[AI CAPTIONS] using preset count={len(captions)}",
@@ -2604,25 +2883,32 @@ def create_reel_from_prompt():
                 scene_plan
             )
 
-            # 3. Передаём визуалы в уже существующий
-            # проверенный видеодвижок ReelForge.
-            files_meta = visual_files
+            # 3. PROMPT AUTO MIX:
+            # сохраняем ВСЕ сцены — видео и изображения —
+            # в исходном порядке сцен.
+            #
+            # Видео будут монтироваться как видео.
+            # Изображения будут превращаться в короткие видеоклипы.
 
-            preset_captions = [
-                scene.get("caption", "")
-                for scene in scene_plan.get("scenes", [])
-                if scene.get("caption")
-            ]
+            media_files = [item["path"] for item in visual_files]
+
+            print(
+                f"[PROMPT MEDIA] MIX total={len(media_files)} "
+                f"videos={sum(1 for x in visual_files if x.get('type') == 'video')} "
+                f"images={sum(1 for x in visual_files if x.get('type') == 'image')}",
+                flush=True
+            )
 
             process_video_job(
                 job_id,
                 job_dir,
-                files_meta,
+                media_files,
                 None,
                 topic,
-                "images",
-                preset_captions=preset_captions,
+                "prompt",
+                preset_captions=None,
             )
+
 
         except Exception as e:
             import traceback
