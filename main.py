@@ -468,6 +468,13 @@ def prepare_prompt_images(job_dir, scene_plan):
 
         used_urls.add(selected["url"])
 
+        print(
+            f"[PROMPT VISUAL] SELECTED scene={index} "
+            f"title={selected.get('title', '')} "
+            f"url={selected.get('url', '')}",
+            flush=True
+        )
+
         downloaded.append({
             "path": output_path,
             "caption": scene.get("caption", ""),
