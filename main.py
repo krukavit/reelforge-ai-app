@@ -812,6 +812,17 @@ async function uploadVideoForm(form) {
                     );
                 }
 
+                console.log(
+                    "[UPLOAD-DEBUG] RESPONSE chunk",
+                    chunkIndex + 1,
+                    "/",
+                    totalChunks,
+                    "status=",
+                    response.status,
+                    "ok=",
+                    response.ok
+                );
+
                 if (!response.ok) {
                     let message =
                         "Ошибка загрузки видео " +
@@ -829,6 +840,13 @@ async function uploadVideoForm(form) {
 
                     throw new Error(message);
                 }
+
+                console.log(
+                    "[UPLOAD-DEBUG] CHUNK OK, next=",
+                    chunkIndex + 2,
+                    "/",
+                    totalChunks
+                );
             }
 
             updateUploadProgress(
