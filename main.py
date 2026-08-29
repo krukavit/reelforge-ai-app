@@ -702,19 +702,13 @@ def prepare_prompt_images(job_dir, scene_plan):
 
 def generate_prompt_scene_plan(topic):
     """
-    Создаёт план сцен для автоматического режима.
-    Возвращает JSON:
-    {
-      "title": "...",
-      "duration": 40,
-      "scenes": [
-        {
-          "caption": "...",
-          "search": "..."
-        }
-      ]
-    }
+    Создаёт редактируемый план Prompt Mode.
+
+    План НЕ является готовыми титрами.
+    Поле caption используется как описание/текст сцены
+    и показывается пользователю для редактирования.
     """
+
     client = get_groq_client()
 
     user_prompt = (topic or "").strip()
@@ -728,27 +722,28 @@ def generate_prompt_scene_plan(topic):
                 "role": "system",
                 "content": """Ты — режиссёр коротких вертикальных видео ReelForge AI.
 
-Твоя задача — превратить запрос пользователя в план визуального Reels.
+Преврати запрос пользователя в редактируемый план визуального Reels.
 
 Правила:
 1. Строго сохраняй основную тему пользователя.
 2. Если пользователь указал длительность — используй её.
-3. Если длительность не указана — примерно 40 секунд.
+3. Если длительность не указана — используй примерно 40 секунд.
 4. Создай 6–10 сцен.
-5. Каждая сцена должна иметь короткий субтитр на русском, максимум 6 слов.
-6. Для каждой сцены создай простой поисковый запрос на английском языке.
-7. Поисковый запрос должен описывать реальный визуальный объект/место/событие.
-8. Не придумывай несуществующие факты.
-9. Не добавляй объяснения.
-10. Верни ТОЛЬКО валидный JSON.
+5. Для каждой сцены создай короткое описание происходящего на экране.
+6. Это описание НЕ является титром и НЕ будет показываться поверх видео.
+7. Для каждой сцены создай точный поисковый запрос на английском языке.
+8. Поисковый запрос должен описывать реальный визуальный объект, место, человека, действие или событие.
+9. Не придумывай несуществующие факты.
+10. Не добавляй объяснения.
+11. Верни ТОЛЬКО валидный JSON.
 
 Формат:
 {
-  "title": "название",
+  "title": "название ролика",
   "duration": 40,
   "scenes": [
     {
-      "caption": "короткий субтитр",
+      "caption": "описание сцены",
       "search": "English visual search query"
     }
   ]
@@ -764,7 +759,6 @@ def generate_prompt_scene_plan(topic):
 
     raw = response.choices[0].message.content.strip()
 
-    # Убираем возможный markdown-блок ```json ... ```
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
@@ -777,6 +771,7 @@ def generate_prompt_scene_plan(topic):
         raise RuntimeError("AI вернул некорректный план сцен")
 
     scenes = plan.get("scenes")
+
     if not isinstance(scenes, list) or not scenes:
         raise RuntimeError("AI не создал сцены")
 
@@ -791,15 +786,20 @@ def generate_prompt_scene_plan(topic):
 
         if caption and search:
             clean_scenes.append({
-                "caption": caption[:160],
-                "search": search[:200],
+                "caption": caption[:300],
+                "search": search[:300],
             })
 
     if not clean_scenes:
         raise RuntimeError("Не удалось получить корректные сцены")
 
     try:
-        duration = int(plan.get("duration", parse_target_duration(topic)))
+        duration = int(
+            plan.get(
+                "duration",
+                parse_target_duration(topic)
+            )
+        )
     except Exception:
         duration = parse_target_duration(topic)
 
@@ -817,7 +817,6 @@ def generate_prompt_scene_plan(topic):
     )
 
     return result
-
 
 def download_prompt_image(url, output_path):
     """
@@ -1835,6 +1834,45 @@ RESULT_HTML = """
             <a class="button new-video" href="/">
                 ＋ Создать ещё один
             </a>
+        </div>
+        {% endif %}
+
+        {% if topic %}
+        <div class="script" style="margin-top:24px;">
+            <div style="font-size:18px;font-weight:700;margin-bottom:10px;">
+                ✏️ Промт для редактирования
+            </div>
+
+            <p style="color:#9ca3af;font-size:14px;margin:0 0 12px;">
+                Измени промт и создай новую версию ролика.
+            </p>
+
+            <form action="/create_reel_from_prompt" method="post">
+                <textarea
+                    name="topic"
+                    required
+                    style="
+                        width:100%;
+                        min-height:130px;
+                        padding:14px;
+                        border-radius:12px;
+                        border:1px solid #30303b;
+                        background:#08080e;
+                        color:#fff;
+                        font-size:16px;
+                        line-height:1.5;
+                        resize:vertical;
+                    "
+                >{{ topic }}</textarea>
+
+                <button
+                    class="button download"
+                    type="submit"
+                    style="border:0;cursor:pointer;margin-top:12px;"
+                >
+                    🔄 Создать новую версию
+                </button>
+            </form>
         </div>
         {% endif %}
 
@@ -3068,7 +3106,13 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
             shutil.copy(silent_path, final_path)
 
         print(f"[JOB {job_id}] DONE final={final_path}", flush=True)
-        set_job(job_id, status="done", script=script, video_url=f"{BACKEND_URL}/outputs/{job_id}.mp4")
+        set_job(
+            job_id,
+            status="done",
+            script=script,
+            topic=topic,
+            video_url=f"{BACKEND_URL}/outputs/{job_id}.mp4"
+        )
     except Exception as e:
         import traceback
         print(f"VIDEO JOB ERROR [{job_id}]: {e}", flush=True)
@@ -3746,7 +3790,12 @@ def status(job_id):
     elif job.get("status") == "error":
         return render_template_string(ERROR_HTML, error=job.get("error", "неизвестная ошибка"))
     elif job.get("status") == "done":
-        return render_template_string(RESULT_HTML, script=job.get("script"), video_url=job.get("video_url"))
+        return render_template_string(
+            RESULT_HTML,
+            script=job.get("script"),
+            topic=job.get("topic", ""),
+            video_url=job.get("video_url")
+        )
     return "Неизвестный статус задачи", 500
 
 @app.route("/outputs/<path:filename>")
