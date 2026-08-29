@@ -22,7 +22,7 @@ def db_connect():
     return psycopg.connect(database_url)
 
 
-def get_free_entries_used(user_key):
+def get_user_access(user_key):
     if not user_key:
         return None
 
@@ -30,13 +30,24 @@ def get_free_entries_used(user_key):
         with db_connect() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT free_entries_used
+                    SELECT
+                        free_entries_used,
+                        free_entries_limit,
+                        unlimited_access
                     FROM users
                     WHERE user_key = %s
                 """, (user_key,))
+
                 row = cur.fetchone()
 
-        return row[0] if row else None
+        if not row:
+            return None
+
+        return {
+            "used": row[0],
+            "limit": row[1],
+            "unlimited": bool(row[2]),
+        }
 
     except Exception as e:
         print(f"[ACCESS] DB ERROR: {e}", flush=True)
@@ -78,12 +89,11 @@ def increment_free_entries(user_key):
 
 def check_access():
     """
-    Бесплатный доступ контролируется через PostgreSQL.
+    Контроль доступа через PostgreSQL.
 
-    Пользователь должен сначала указать email.
-    После этого email получает постоянный user_key.
-
-    Бесплатные входы: 3 на пользователя.
+    - Админские маршруты всегда доступны middleware.
+    - unlimited_access=True -> безлимит.
+    - Иначе используется индивидуальный free_entries_limit.
     """
 
     if request.path == "/health":
@@ -92,6 +102,7 @@ def check_access():
     if request.path.startswith("/outputs/"):
         return None
 
+    # Загрузки должны проходить до проверки генерации.
     if request.path in (
         "/start_video_upload",
         "/upload_video_part",
@@ -101,32 +112,36 @@ def check_access():
     ):
         return None
 
-    if request.path == "/payment":
+    # Оплата и email доступны без обычного доступа.
+    if request.path in (
+        "/payment",
+        "/collect-email",
+    ):
         return None
 
-    if request.path == "/collect-email":
-        return None
-
-    if request.path == "/admin/reset-free":
-        return None
-
-    if request.path == "/admin/users":
+    # ============================================================
+    # ADMIN — НИКОГДА НЕ ОТПРАВЛЯЕМ НА PAYMENT
+    # ============================================================
+    if request.path.startswith("/admin/"):
         return None
 
     user_key = request.cookies.get(USER_COOKIE_NAME)
 
-    # Без email/user_key пользователь не получает доступ к приложению.
+    # Без email/user_key пользователь не получает доступ.
     if not user_key:
         return redirect(f"{LANDING_URL}?redirected=1", code=302)
 
-    used = get_free_entries_used(user_key)
+    access = get_user_access(user_key)
 
-    # Пользователь существует, но база недоступна.
-    if used is None:
+    if access is None:
         return "Ошибка проверки доступа", 500
 
-    # Если бесплатные входы закончились — оплата.
-    if used >= MAX_FREE_ENTRIES:
+    # Безлимитный пользователь.
+    if access["unlimited"]:
+        return None
+
+    # Индивидуальный лимит бесплатных генераций.
+    if access["used"] >= access["limit"]:
         return redirect("/payment", code=302)
 
     return None
