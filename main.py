@@ -723,60 +723,126 @@ async function uploadVideoForm(form) {
             "Сессия создана.<br>Подготавливаем файлы..."
         );
 
-        // Загружаем КАЖДОЕ видео отдельным HTTP-запросом
+        // Загружаем каждое видео небольшими частями.
+        // Это предотвращает Failed to fetch на больших multipart-запросах.
+        const VIDEO_CHUNK_SIZE = 4 * 1024 * 1024;
+
         for (let i = 0; i < files.length; i++) {
-            if (btn) btn.innerHTML = `⏳ Загружаем видео ${i + 1} из ${files.length}...`;
+            const file = files[i];
 
-            const videoPercent =
-                5 + ((i / files.length) * 65);
-
-            updateUploadProgress(
-                videoPercent,
-                "📤 Загружаем видео " + (i + 1) + " из " + files.length,
-                "Файл: <b>" + files[i].name + "</b><br>" +
-                "Размер: <b>" +
-                (files[i].size / 1024 / 1024).toFixed(1) +
-                " MB</b><br>" +
-                "Состояние: <b>загрузка...</b>"
+            const totalChunks = Math.ceil(
+                file.size / VIDEO_CHUNK_SIZE
             );
 
-            const fd = new FormData();
-            fd.append("job_id", jobId);
-            fd.append("index", String(i));
-            fd.append("video", files[i], files[i].name);
+            if (btn) {
+                btn.innerHTML =
+                    `⏳ Видео ${i + 1} из ${files.length}`;
+            }
 
-            let response;
-            try {
-                response = await fetch("/upload_video_part", {
-                    method: "POST",
-                    body: fd
-                });
-            } catch (e) {
-                console.error("[FETCH ERROR] /upload_video_part", e);
-                throw new Error(
-                    "Не удалось загрузить видео " + (i + 1) +
-                    ": /upload_video_part — " + e.message
+            for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+                const start = chunkIndex * VIDEO_CHUNK_SIZE;
+                const end = Math.min(
+                    start + VIDEO_CHUNK_SIZE,
+                    file.size
                 );
+
+                const blob = file.slice(start, end);
+
+                const fd = new FormData();
+
+                fd.append("job_id", jobId);
+                fd.append("index", String(i));
+                fd.append("chunk_index", String(chunkIndex));
+                fd.append("total_chunks", String(totalChunks));
+                fd.append("video", blob, file.name);
+
+                const chunkProgress =
+                    5 +
+                    (
+                        (
+                            i +
+                            ((chunkIndex + 1) / totalChunks)
+                        ) /
+                        files.length
+                    ) * 65;
+
+                updateUploadProgress(
+                    chunkProgress,
+                    "📤 Загружаем видео " +
+                        (i + 1) +
+                        " из " +
+                        files.length,
+                    "Файл: <b>" + file.name + "</b><br>" +
+                    "Часть: <b>" +
+                        (chunkIndex + 1) +
+                        " / " +
+                        totalChunks +
+                    "</b><br>" +
+                    "Размер: <b>" +
+                        (file.size / 1024 / 1024).toFixed(1) +
+                        " MB</b>"
+                );
+
+                let response;
+
+                try {
+                    response = await fetch("/upload_video_part", {
+                        method: "POST",
+                        body: fd
+                    });
+                } catch (e) {
+                    console.error(
+                        "[FETCH ERROR] /upload_video_part",
+                        e
+                    );
+
+                    throw new Error(
+                        "Не удалось загрузить видео " +
+                        (i + 1) +
+                        ", часть " +
+                        (chunkIndex + 1) +
+                        " из " +
+                        totalChunks +
+                        ": /upload_video_part — " +
+                        (e.message || "Failed to fetch")
+                    );
+                }
+
+                if (!response.ok) {
+                    let message =
+                        "Ошибка загрузки видео " +
+                        (i + 1) +
+                        ", часть " +
+                        (chunkIndex + 1);
+
+                    try {
+                        const data = await response.json();
+
+                        if (data.error) {
+                            message = data.error;
+                        }
+                    } catch (_) {}
+
+                    throw new Error(message);
+                }
             }
 
             updateUploadProgress(
-                5 + (((i + 1) / files.length) * 65),
-                "✅ Видео " + (i + 1) + " из " + files.length + " загружено",
-                "Файл: <b>" + files[i].name + "</b><br>" +
+                5 +
+                    (((i + 1) / files.length) * 65),
+                "✅ Видео " +
+                    (i + 1) +
+                    " из " +
+                    files.length +
+                    " загружено",
+                "Файл: <b>" +
+                    file.name +
+                    "</b><br>" +
                 "Размер: <b>" +
-                (files[i].size / 1024 / 1024).toFixed(1) +
-                " MB</b><br>" +
+                    (file.size / 1024 / 1024).toFixed(1) +
+                    " MB</b><br>" +
                 "Продолжение загрузки..."
             );
-
-            if (!response.ok) {
-                let message = "Ошибка загрузки видео " + (i + 1);
-                try {
-                    const data = await response.json();
-                    if (data.error) message = data.error;
-                } catch (_) {}
-                throw new Error(message);
-            }
         }
 
         updateUploadProgress(
@@ -1928,45 +1994,130 @@ def upload_video_part():
     job_id = request.form.get("job_id", "")
     video = request.files.get("video")
 
-    if not job_id or not video or not video.filename:
-        return jsonify({"error": "Видео не получено"}), 400
+    try:
+        index = int(request.form.get("index", "0"))
+        chunk_index = int(request.form.get("chunk_index", "0"))
+        total_chunks = int(request.form.get("total_chunks", "1"))
+    except Exception:
+        return jsonify({"error": "Некорректные параметры загрузки видео"}), 400
 
-    # Защита от слишком большого HTTP multipart-запроса.
-    if request.content_length and request.content_length > MAX_UPLOAD_REQUEST:
-        return jsonify({
-            "error": (
-                "Видео слишком большое. "
-                "Максимальный размер одного видео — 100 MB."
-            )
-        }), 413
+    if (
+        not job_id
+        or not video
+        or not video.filename
+        or index < 0
+        or chunk_index < 0
+        or total_chunks <= 0
+        or chunk_index >= total_chunks
+    ):
+        return jsonify({"error": "Некорректная часть видео"}), 400
 
     job = get_job(job_id)
     if not job:
         return jsonify({"error": "Задача не найдена"}), 404
 
-    try:
-        index = int(request.form.get("index", "0"))
-    except Exception:
-        index = 0
-
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
     ext = os.path.splitext(video.filename)[1] or ".mp4"
-    video_path = os.path.join(job_dir, f"src{index:03d}{ext}")
+
+    # Временная папка конкретного видео.
+    video_chunk_dir = os.path.join(
+        job_dir,
+        f"video{index:03d}_chunks"
+    )
+    os.makedirs(video_chunk_dir, exist_ok=True)
+
+    chunk_path = os.path.join(
+        video_chunk_dir,
+        f"part{chunk_index:05d}"
+    )
 
     started = time.time()
+
     print(
-        f"[UPLOAD-PART] START job={job_id} index={index} "
-        f"name={video.filename} content_length={request.content_length}",
+        f"[UPLOAD-PART] START job={job_id} "
+        f"video={index} chunk={chunk_index+1}/{total_chunks} "
+        f"name={video.filename} "
+        f"content_length={request.content_length}",
         flush=True
     )
 
-    video.save(video_path)
+    video.save(chunk_path)
+
+    chunk_size = os.path.getsize(chunk_path)
+
+    print(
+        f"[UPLOAD-PART] SAVED job={job_id} "
+        f"video={index} chunk={chunk_index+1}/{total_chunks} "
+        f"size={chunk_size} "
+        f"elapsed={time.time()-started:.2f}s",
+        flush=True
+    )
+
+    # Пока не последняя часть — просто подтверждаем.
+    if chunk_index != total_chunks - 1:
+        return jsonify({
+            "ok": True,
+            "complete": False,
+            "index": index,
+            "chunk_index": chunk_index,
+            "size": chunk_size
+        })
+
+    # Последняя часть: проверяем, что все части на месте.
+    missing = []
+
+    for i in range(total_chunks):
+        expected = os.path.join(
+            video_chunk_dir,
+            f"part{i:05d}"
+        )
+
+        if not os.path.exists(expected):
+            missing.append(i)
+
+    if missing:
+        return jsonify({
+            "error": f"Не хватает частей видео: {missing}"
+        }), 400
+
+    video_path = os.path.join(
+        job_dir,
+        f"src{index:03d}{ext}"
+    )
+
+    # Собираем исходное видео строго по порядку.
+    with open(video_path, "wb") as out:
+        for i in range(total_chunks):
+            part = os.path.join(
+                video_chunk_dir,
+                f"part{i:05d}"
+            )
+
+            with open(part, "rb") as src:
+                shutil.copyfileobj(src, out)
+
+    # Удаляем временные части.
+    for i in range(total_chunks):
+        part = os.path.join(
+            video_chunk_dir,
+            f"part{i:05d}"
+        )
+
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+
+    try:
+        os.rmdir(video_chunk_dir)
+    except OSError:
+        pass
 
     size = os.path.getsize(video_path)
 
-    # Серверная проверка фактического размера файла.
+    # Серверная проверка полного файла.
     if size > MAX_VIDEO_SIZE:
         try:
             os.remove(video_path)
@@ -1984,19 +2135,23 @@ def upload_video_part():
     with JOBS_LOCK:
         current = JOBS.setdefault(job_id, {})
         paths = current.setdefault("video_paths", [])
+
         paths = [x for x in paths if x != video_path]
         paths.append(video_path)
         paths.sort()
+
         current["video_paths"] = paths
 
     print(
-        f"[UPLOAD-PART] SAVED job={job_id} index={index} "
-        f"size={size} elapsed={time.time()-started:.2f}s",
+        f"[UPLOAD-PART] COMPLETE job={job_id} "
+        f"video={index} chunks={total_chunks} "
+        f"size={size}",
         flush=True
     )
 
     return jsonify({
         "ok": True,
+        "complete": True,
         "index": index,
         "size": size
     })

@@ -1,5 +1,6 @@
 from flask import request, redirect
 import os
+import psycopg
 
 LANDING_URL = os.environ.get(
     "LANDING_URL",
@@ -9,19 +10,80 @@ LANDING_URL = os.environ.get(
 ACCESS_TOKEN = "rf2026free"
 
 COOKIE_NAME = "rf_access"
-COUNT_COOKIE_NAME = "rf_access_count"
+USER_COOKIE_NAME = "rf_user_key"
 
 MAX_FREE_ENTRIES = 3
 
 
+def db_connect():
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise RuntimeError("DATABASE_URL не задан")
+    return psycopg.connect(database_url)
+
+
+def get_free_entries_used(user_key):
+    if not user_key:
+        return None
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT free_entries_used
+                    FROM users
+                    WHERE user_key = %s
+                """, (user_key,))
+                row = cur.fetchone()
+
+        return row[0] if row else None
+
+    except Exception as e:
+        print(f"[ACCESS] DB ERROR: {e}", flush=True)
+        return None
+
+
+def increment_free_entries(user_key):
+    if not user_key:
+        return False
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE users
+                    SET free_entries_used = free_entries_used + 1
+                    WHERE user_key = %s
+                      AND free_entries_used < %s
+                    RETURNING free_entries_used
+                """, (user_key, MAX_FREE_ENTRIES))
+
+                row = cur.fetchone()
+
+            conn.commit()
+
+        if row:
+            print(
+                f"[ACCESS] free entry used user={user_key} count={row[0]}",
+                flush=True
+            )
+            return True
+
+        return False
+
+    except Exception as e:
+        print(f"[ACCESS] DB ERROR increment: {e}", flush=True)
+        return False
+
+
 def check_access():
     """
-    Бесплатный доступ: 3 входа.
-    Счётчик увеличивается только при входе на главную /
-    с правильным access-токеном.
+    Бесплатный доступ контролируется через PostgreSQL.
 
-    Запросы /status, /generate, /create_video,
-    /create_reel_from_videos и /outputs/* не расходуют вход.
+    Пользователь должен сначала указать email.
+    После этого email получает постоянный user_key.
+
+    Бесплатные входы: 3 на пользователя.
     """
 
     if request.path == "/health":
@@ -30,8 +92,6 @@ def check_access():
     if request.path.startswith("/outputs/"):
         return None
 
-    # Внутренние запросы пошаговой загрузки видео.
-    # Они не должны отправлять пользователя обратно на лендинг.
     if request.path in (
         "/start_video_upload",
         "/upload_video_part",
@@ -44,70 +104,47 @@ def check_access():
     if request.path == "/payment":
         return None
 
-    # Админский сброс бесплатных входов.
-    # Сам маршрут дополнительно защищён ADMIN_RESET_TOKEN.
+    if request.path == "/collect-email":
+        return None
+
     if request.path == "/admin/reset-free":
         return None
 
-    try:
-        count = int(request.cookies.get(COUNT_COOKIE_NAME, "0"))
-    except (TypeError, ValueError):
-        count = 0
-
-    token = request.args.get("access")
-    has_cookie = request.cookies.get(COOKIE_NAME) == ACCESS_TOKEN
-
-    # Вход по правильной ссылке.
-    # Только "/" с access считается новым бесплатным входом.
-    if token == ACCESS_TOKEN:
-        if request.path == "/":
-            if count < MAX_FREE_ENTRIES:
-                return None
-            return redirect("/payment", code=302)
-
-        # access-токен на внутренних URL разрешаем,
-        # но НЕ увеличиваем счётчик.
+    if request.path == "/admin/users":
         return None
 
-    # Уже авторизованный пользователь.
-    if has_cookie:
-        if count < MAX_FREE_ENTRIES:
-            return None
+    user_key = request.cookies.get(USER_COOKIE_NAME)
+
+    # Без email/user_key пользователь не получает доступ к приложению.
+    if not user_key:
+        return redirect(f"{LANDING_URL}?redirected=1", code=302)
+
+    used = get_free_entries_used(user_key)
+
+    # Пользователь существует, но база недоступна.
+    if used is None:
+        return "Ошибка проверки доступа", 500
+
+    # Если бесплатные входы закончились — оплата.
+    if used >= MAX_FREE_ENTRIES:
         return redirect("/payment", code=302)
 
-    return redirect(f"{LANDING_URL}?redirected=1", code=302)
+    return None
 
 
 def set_access_cookie(response):
     """
-    Ставит cookie и увеличивает счётчик ТОЛЬКО при
-    настоящем входе на главную страницу с access-токеном.
+    Сохраняем только служебный access-cookie.
+    Реальный счётчик находится в PostgreSQL.
     """
 
-    token = request.args.get("access")
+    user_key = request.cookies.get(USER_COOKIE_NAME)
 
-    # Считаем только /?access=rf2026free
-    if token == ACCESS_TOKEN and request.path == "/":
-
-        try:
-            count = int(request.cookies.get(COUNT_COOKIE_NAME, "0"))
-        except (TypeError, ValueError):
-            count = 0
-
-        new_count = min(count + 1, MAX_FREE_ENTRIES)
-
+    if user_key:
         response.set_cookie(
             COOKIE_NAME,
             ACCESS_TOKEN,
-            max_age=60 * 60 * 24 * 30,
-            httponly=True,
-            samesite="Lax"
-        )
-
-        response.set_cookie(
-            COUNT_COOKIE_NAME,
-            str(new_count),
-            max_age=60 * 60 * 24 * 30,
+            max_age=60 * 60 * 24 * 365,
             httponly=True,
             samesite="Lax"
         )
