@@ -715,6 +715,7 @@ async function uploadVideoForm(form) {
         }
 
         const startResult = await startResponse.json();
+        console.log("[UPLOAD-DEBUG] startResult OK");
         const jobId = startResult.job_id;
 
         updateUploadProgress(
@@ -726,6 +727,7 @@ async function uploadVideoForm(form) {
         // Загружаем каждое видео небольшими частями.
         // Это предотвращает Failed to fetch на больших multipart-запросах.
         const VIDEO_CHUNK_SIZE = 4 * 1024 * 1024;
+        console.log("[UPLOAD-DEBUG] entering video chunks");
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
@@ -782,6 +784,8 @@ async function uploadVideoForm(form) {
                         (file.size / 1024 / 1024).toFixed(1) +
                         " MB</b>"
                 );
+
+                console.log("[UPLOAD-DEBUG] BEFORE FETCH chunk", chunkIndex + 1, "/", totalChunks);
 
                 let response;
 
