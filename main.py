@@ -624,6 +624,13 @@ function showLoading() {
 }
 
 async function uploadVideoForm(form) {
+    if (form.dataset.uploading === "1") {
+        console.warn("[UPLOAD] duplicate submit ignored");
+        return;
+    }
+
+    form.dataset.uploading = "1";
+
     const btn = form.querySelector("button");
     const filesInput = form.querySelector('input[name="videos"]');
     const topicInput = form.querySelector('textarea[name="topic"]');
@@ -916,6 +923,7 @@ async function uploadVideoForm(form) {
             btn.disabled = false;
             btn.innerHTML = "🚀 Собрать Reels из видео";
         }
+        form.dataset.uploading = "0";
     }
 }
 
