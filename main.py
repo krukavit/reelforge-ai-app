@@ -5421,7 +5421,11 @@ a{{color:#a78bfa}}
       </div>
     </div>
 
-    <a class="back" href="/admin?key={admin_key}">
+    <a class="back"
+      <a class="button" href="/admin/marketing/add?key={admin_key}">
+        ➕ Добавить площадку
+      </a>
+href="/admin?key={admin_key}">
       ← Админка
     </a>
   </div>
@@ -5434,6 +5438,436 @@ a{{color:#a78bfa}}
 """
 
     return html
+
+
+
+
+@app.route("/admin/marketing/check/<int:platform_id>")
+def admin_marketing_check(platform_id):
+    """Проверка доступности сайта/API маркетинговой площадки."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT name, website_url, api_url, api_method
+                    FROM marketing_platforms
+                    WHERE id=%s
+                """, (platform_id,))
+                platform = cur.fetchone()
+
+        if not platform:
+            return "Площадка не найдена", 404
+
+        name, website_url, api_url, api_method = platform
+        import urllib.request
+
+        target = api_url or website_url
+        status_code = None
+        error = None
+
+        try:
+            req = urllib.request.Request(
+                target,
+                method="HEAD",
+                headers={"User-Agent": "ReelForge-AI-Marketing-Checker/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                status_code = response.getcode()
+        except Exception:
+            try:
+                req = urllib.request.Request(
+                    target,
+                    method="GET",
+                    headers={"User-Agent": "ReelForge-AI-Marketing-Checker/1.0"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    status_code = response.getcode()
+            except Exception as e:
+                error = str(e)
+
+        review_status = (
+            "reachable"
+            if status_code and 200 <= status_code < 400
+            else "error"
+        )
+
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE marketing_platforms
+                    SET review_status=%s,
+                        last_error=%s,
+                        last_checked_at=NOW(),
+                        updated_at=NOW()
+                    WHERE id=%s
+                """, (
+                    review_status,
+                    error,
+                    platform_id
+                ))
+            conn.commit()
+
+        status_text = (
+            f"HTTP {status_code}"
+            if status_code
+            else f"Ошибка: {error or 'неизвестная ошибка'}"
+        )
+
+        return render_template_string("""
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка площадки</title>
+<style>
+body{margin:0;background:#07070d;color:#fff;font-family:Arial,sans-serif}
+.container{max-width:700px;margin:auto;padding:30px 16px}
+.card{margin-top:20px;padding:24px;background:#11111a;border:1px solid #292936;border-radius:18px}
+a{color:#a78bfa;text-decoration:none}
+.status{margin-top:18px;padding:16px;border-radius:12px;background:#191326}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/admin/marketing?key={{ admin_key }}">← Маркетинговые площадки</a>
+<h1>🔎 Проверка площадки</h1>
+<div class="card">
+<h2>{{ name }}</h2>
+<p>Проверяем: <b>{{ target }}</b></p>
+<div class="status">
+Статус: <b>{{ status_text }}</b><br>
+Результат: <b>{{ review_status }}</b>
+</div>
+</div>
+</div>
+</body>
+</html>
+""",
+            admin_key=admin_key,
+            name=name,
+            target=target,
+            status_text=status_text,
+            review_status=review_status
+        )
+
+    except Exception as e:
+        print(f"[ADMIN] MARKETING CHECK ERROR: {e}", flush=True)
+        return f"Ошибка проверки: {e}", 500
+
+
+@app.route("/admin/marketing/add", methods=["GET", "POST"])
+def admin_marketing_add():
+    """Добавление новой маркетинговой площадки."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    if request.method == "POST":
+        try:
+            name = request.form.get("name", "").strip()
+            slug = request.form.get("slug", "").strip()
+            website_url = request.form.get("website_url", "").strip()
+            api_url = request.form.get("api_url", "").strip() or None
+            api_method = request.form.get("api_method", "POST").strip().upper()
+            auth_type = request.form.get("auth_type", "").strip() or None
+            automation_allowed = request.form.get("automation_allowed") == "1"
+            badge_required = request.form.get("badge_required") == "1"
+
+            if not name or not slug or not website_url:
+                return "Ошибка: Name, Slug и Website URL обязательны.", 400
+
+            with db_connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO marketing_platforms
+                        (name, slug, website_url, api_url, api_method,
+                         automation_allowed, auth_type, badge_required)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                    """, (
+                        name, slug, website_url, api_url, api_method,
+                        automation_allowed, auth_type, badge_required
+                    ))
+                conn.commit()
+
+            return redirect(
+                f"/admin/marketing?key={urllib.parse.quote(admin_key)}"
+            )
+
+        except Exception as e:
+            print(f"[ADMIN] MARKETING ADD ERROR: {e}", flush=True)
+            return f"Ошибка добавления: {e}", 500
+
+    return render_template_string("""
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReelForge AI — Добавить площадку</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07070d;color:#fff;font-family:Arial,sans-serif}
+.container{max-width:700px;margin:auto;padding:28px 16px 60px}
+a{color:#a78bfa;text-decoration:none}
+.card{margin-top:20px;padding:24px;background:#11111a;border:1px solid #292936;border-radius:18px}
+label{display:block;margin-top:16px;margin-bottom:7px;font-weight:700}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #393946;background:#090910;color:#fff}
+.check{display:flex;gap:10px;align-items:center}
+.check input{width:auto}
+button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:#7c3aed;color:#fff;font-weight:700}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/admin/marketing?key={{ admin_key }}">← Маркетинговые площадки</a>
+<h1>➕ Добавить площадку</h1>
+
+<div class="card">
+<form method="post">
+<label>Название</label>
+<input name="name" required placeholder="Например: Product Hunt">
+
+<label>Slug</label>
+<input name="slug" required placeholder="product-hunt">
+
+<label>Website URL</label>
+<input name="website_url" type="url" required placeholder="https://example.com">
+
+<label>API URL</label>
+<input name="api_url" type="url" placeholder="https://example.com/api/...">
+
+<label>API Method</label>
+<select name="api_method">
+<option>POST</option>
+<option>GET</option>
+<option>PUT</option>
+<option>PATCH</option>
+</select>
+
+<label>Auth type</label>
+<input name="auth_type" placeholder="none / api_key / oauth">
+
+<label class="check">
+<input type="checkbox" name="automation_allowed" value="1">
+Разрешить автоматизацию
+</label>
+
+<label class="check">
+<input type="checkbox" name="badge_required" value="1">
+Требуется badge
+</label>
+
+<button type="submit">Сохранить площадку</button>
+</form>
+</div>
+</div>
+</body>
+</html>
+""", admin_key=admin_key)
+
+
+@app.route("/admin/marketing/edit/<int:platform_id>", methods=["GET", "POST"])
+def admin_marketing_edit(platform_id):
+    """Редактирование маркетинговой площадки."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                if request.method == "POST":
+                    cur.execute("""
+                        UPDATE marketing_platforms
+                        SET name=%s,
+                            slug=%s,
+                            website_url=%s,
+                            api_url=%s,
+                            api_method=%s,
+                            automation_allowed=%s,
+                            auth_type=%s,
+                            badge_required=%s,
+                            submission_status=%s,
+                            review_status=%s,
+                            publication_url=%s,
+                            last_error=%s,
+                            updated_at=NOW()
+                        WHERE id=%s
+                    """, (
+                        request.form.get("name", "").strip(),
+                        request.form.get("slug", "").strip(),
+                        request.form.get("website_url", "").strip(),
+                        request.form.get("api_url", "").strip() or None,
+                        request.form.get("api_method", "POST").strip().upper(),
+                        request.form.get("automation_allowed") == "1",
+                        request.form.get("auth_type", "").strip() or None,
+                        request.form.get("badge_required") == "1",
+                        request.form.get("submission_status", "not_submitted").strip(),
+                        request.form.get("review_status", "unknown").strip(),
+                        request.form.get("publication_url", "").strip() or None,
+                        request.form.get("last_error", "").strip() or None,
+                        platform_id
+                    ))
+                    conn.commit()
+
+                    return redirect(
+                        f"/admin/marketing?key={urllib.parse.quote(admin_key)}"
+                    )
+
+                cur.execute("""
+                    SELECT id,name,slug,website_url,api_url,api_method,
+                           automation_allowed,auth_type,badge_required,
+                           submission_status,review_status,publication_url,
+                           last_error
+                    FROM marketing_platforms
+                    WHERE id=%s
+                """, (platform_id,))
+                platform = cur.fetchone()
+
+        if not platform:
+            return "Площадка не найдена", 404
+
+        (
+            pid,name,slug,website_url,api_url,api_method,
+            automation_allowed,auth_type,badge_required,
+            submission_status,review_status,publication_url,last_error
+        ) = platform
+
+        return render_template_string("""
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReelForge AI — Редактирование</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#07070d;color:#fff;font-family:Arial,sans-serif}
+.container{max-width:760px;margin:auto;padding:28px 16px 60px}
+a{color:#a78bfa;text-decoration:none}
+.card{margin-top:20px;padding:24px;background:#11111a;border:1px solid #292936;border-radius:18px}
+label{display:block;margin-top:15px;margin-bottom:7px;font-weight:700}
+input,select{width:100%;padding:12px;border-radius:10px;border:1px solid #393946;background:#090910;color:#fff}
+.check{display:flex;gap:10px;align-items:center}
+.check input{width:auto}
+button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:#7c3aed;color:#fff;font-weight:700}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/admin/marketing?key={{ admin_key }}">← Маркетинговые площадки</a>
+<h1>✏️ {{ name }}</h1>
+
+<div class="card">
+<form method="post">
+<label>Название</label>
+<input name="name" value="{{ name }}" required>
+
+<label>Slug</label>
+<input name="slug" value="{{ slug }}" required>
+
+<label>Website URL</label>
+<input name="website_url" value="{{ website_url }}" required>
+
+<label>API URL</label>
+<input name="api_url" value="{{ api_url or '' }}">
+
+<label>API Method</label>
+<select name="api_method">
+{% for method in ["POST","GET","PUT","PATCH"] %}
+<option value="{{ method }}" {% if api_method == method %}selected{% endif %}>{{ method }}</option>
+{% endfor %}
+</select>
+
+<label>Auth type</label>
+<input name="auth_type" value="{{ auth_type or '' }}">
+
+<label>Статус отправки</label>
+<input name="submission_status" value="{{ submission_status }}">
+
+<label>Статус проверки</label>
+<input name="review_status" value="{{ review_status }}">
+
+<label>Publication URL</label>
+<input name="publication_url" value="{{ publication_url or '' }}">
+
+<label>Последняя ошибка</label>
+<input name="last_error" value="{{ last_error or '' }}">
+
+<label class="check">
+<input type="checkbox" name="automation_allowed" value="1" {% if automation_allowed %}checked{% endif %}>
+Разрешить автоматизацию
+</label>
+
+<label class="check">
+<input type="checkbox" name="badge_required" value="1" {% if badge_required %}checked{% endif %}>
+Требуется badge
+</label>
+
+<button type="submit">💾 Сохранить изменения</button>
+</form>
+</div>
+</div>
+</body>
+</html>
+""",
+            admin_key=admin_key,
+            pid=pid,
+            name=name,
+            slug=slug,
+            website_url=website_url,
+            api_url=api_url,
+            api_method=api_method,
+            automation_allowed=automation_allowed,
+            auth_type=auth_type,
+            badge_required=badge_required,
+            submission_status=submission_status,
+            review_status=review_status,
+            publication_url=publication_url,
+            last_error=last_error
+        )
+
+    except Exception as e:
+        print(f"[ADMIN] MARKETING EDIT ERROR: {e}", flush=True)
+        return f"Ошибка редактирования: {e}", 500
+
+
+@app.route("/admin/marketing/delete/<int:platform_id>", methods=["POST"])
+def admin_marketing_delete(platform_id):
+    """Удаление маркетинговой площадки."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM marketing_platforms WHERE id=%s",
+                    (platform_id,)
+                )
+            conn.commit()
+
+        return redirect(
+            f"/admin/marketing?key={urllib.parse.quote(admin_key)}"
+        )
+
+    except Exception as e:
+        print(f"[ADMIN] MARKETING DELETE ERROR: {e}", flush=True)
+        return f"Ошибка удаления: {e}", 500
 
 
 @app.route("/admin/plans")
