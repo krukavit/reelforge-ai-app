@@ -1963,6 +1963,60 @@ RESULT_HTML = """
         </div>
         {% endif %}
 
+        {% if video_url %}
+        <div style="
+            margin-top:3px;
+            margin-bottom:3px;
+            border-radius:12px;
+            overflow:hidden;
+            border:1px solid #3a3a4a;
+            background:#111118;
+        ">
+            <a href="/" style="
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                gap:10px;
+                min-height:58px;
+                padding:8px 12px;
+                color:#fff;
+                text-decoration:none;
+            ">
+                <div style="
+                    font-size:34px;
+                    line-height:1;
+                ">🐱</div>
+
+                <div style="text-align:left;">
+                    <div style="
+                        font-size:16px;
+                        font-weight:800;
+                    ">ReelForge AI</div>
+
+                    <div style="
+                        font-size:12px;
+                        color:#c4b5fd;
+                        margin-top:2px;
+                    ">👆 Нажми на котика</div>
+                </div>
+            </a>
+
+            <a href="/"
+               style="
+                   display:block;
+                   text-align:center;
+                   padding:5px;
+                   border-top:1px solid #292936;
+                   color:#d8b4fe;
+                   font-size:11px;
+                   font-weight:700;
+                   text-decoration:none;
+               ">
+                ⬇ Скачать баннер
+            </a>
+        </div>
+        {% endif %}
+
         {% if topic %}
         <div class="script result-editor" style="
             margin-top:2px;
