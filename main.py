@@ -1977,15 +1977,6 @@ RESULT_HTML = """
                 ✏️ Редактор новой версии
             </div>
 
-            <p style="
-                color:#9ca3af;
-                font-size:13px;
-                line-height:1.35;
-                margin:0 0 11px;
-            ">
-                Видео сверху — редактор снизу.
-                Измени требования и быстро создай новую версию.
-            </p>
 
             <form action="/create_reel_from_prompt" method="post">
 
@@ -2088,7 +2079,7 @@ RESULT_HTML = """
                     required
                     style="
                         width:100%;
-                        min-height:250px;
+                        min-height:500px;
                         padding:12px;
                         border-radius:11px;
                         border:1px solid #3a3a4a;
