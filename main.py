@@ -5467,7 +5467,7 @@ def admin_marketing_check(platform_id):
         name, website_url, api_url, api_method = platform
         import urllib.request
 
-        target = api_url or website_url
+        target = website_url
         status_code = None
         error = None
 
