@@ -3837,6 +3837,75 @@ PROMPT_PREVIEW_HTML = """
             border: 1px solid #30303b;
         }
 
+        .editor-options {
+            margin-top: 18px;
+            padding: 16px;
+            border-radius: 14px;
+            background: #0c0c13;
+            border: 1px solid #272733;
+        }
+
+        .option-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .option-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            padding: 13px 0;
+            border-top: 1px solid #20202a;
+            cursor: pointer;
+        }
+
+        .option-row:first-of-type {
+            border-top: 0;
+        }
+
+        .option-row b {
+            display: block;
+            font-size: 15px;
+        }
+
+        .option-row small {
+            display: block;
+            margin-top: 4px;
+            color: #8f8f9d;
+            font-size: 12px;
+        }
+
+        .option-row input[type="checkbox"] {
+            width: 22px;
+            height: 22px;
+            accent-color: #a855f7;
+            flex-shrink: 0;
+        }
+
+        .subtitle-position {
+            margin-top: 10px;
+            padding-top: 13px;
+            border-top: 1px solid #20202a;
+            color: #d1d1d8;
+            font-size: 14px;
+        }
+
+        .position-title {
+            margin-bottom: 9px;
+            font-weight: 600;
+        }
+
+        .subtitle-position label {
+            margin-right: 18px;
+            cursor: pointer;
+        }
+
+        .subtitle-position input {
+            accent-color: #a855f7;
+        }
+
         .original {
             margin-top: 20px;
             padding: 14px;
@@ -3864,6 +3933,41 @@ PROMPT_PREVIEW_HTML = """
 
         <form action="/create_reel_from_prompt" method="post">
             <textarea name="topic" required>{{ prepared_prompt }}</textarea>
+
+            <div class="editor-options">
+                <div class="option-title">⚙️ Настройки видео</div>
+
+                <label class="option-row">
+                    <span>
+                        <b>Титры на экране</b>
+                        <small>Добавить текст поверх видео</small>
+                    </span>
+                    <input type="checkbox" name="editor_captions" value="1">
+                </label>
+
+                <label class="option-row">
+                    <span>
+                        <b>Голос за кадром</b>
+                        <small>AI создаст озвучку по сценам</small>
+                    </span>
+                    <input type="checkbox" name="editor_voiceover" value="1">
+                </label>
+
+                <div class="subtitle-position">
+                    <div class="position-title">Положение титров</div>
+
+                    <label>
+                        <input type="radio" name="editor_subtitle_position" value="bottom" checked>
+                        Снизу
+                    </label>
+
+                    <label>
+                        <input type="radio" name="editor_subtitle_position" value="top">
+                        Сверху
+                    </label>
+                </div>
+            </div>
+
 
             <button class="button" type="submit">
                 🎬 Создать Reels
