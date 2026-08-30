@@ -3505,7 +3505,7 @@ def process_video_job(
                     f"[AI CAPTIONS] using preset count={len(captions)}",
                     flush=True
                 )
-            elif script:
+            elif instructions.get("use_captions") and script:
                 try:
                     captions = generate_captions(
                         script,
@@ -3520,6 +3520,10 @@ def process_video_job(
                     captions = []
             else:
                 captions = []
+                print(
+                    "[AI CAPTIONS] disabled by user instructions",
+                    flush=True
+                )
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
