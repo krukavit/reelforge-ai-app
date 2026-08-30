@@ -1954,12 +1954,12 @@ RESULT_HTML = """
         {% endif %}
 
         {% if topic %}
-        <div class="script" style="
-            margin-top:28px;
-            padding:24px;
+        <div class="script result-editor" style="
+            margin-top:20px;
+            padding:18px;
             background:#111118;
             border:1px solid #3a3a4a;
-            border-radius:20px;
+            border-radius:16px;
         ">
             <div style="
                 font-size:22px;
@@ -1981,16 +1981,23 @@ RESULT_HTML = """
 
             <form action="/create_reel_from_prompt" method="post">
 
-                <label style="
+                <div class="result-editor-options" style="
                     display:flex;
+                    flex-wrap:wrap;
+                    gap:8px;
+                    margin-bottom:12px;
+                ">
+                <label style="
+                    display:inline-flex;
                     align-items:center;
-                    gap:12px;
-                    padding:15px;
-                    margin-bottom:10px;
+                    gap:7px;
+                    padding:9px 11px;
+                    margin:0;
                     background:#08080e;
                     border:1px solid #30303b;
-                    border-radius:14px;
+                    border-radius:10px;
                     cursor:pointer;
+                    flex:1 1 180px;
                 ">
                     <input
                         type="checkbox"
@@ -2005,15 +2012,16 @@ RESULT_HTML = """
                 </label>
 
                 <label style="
-                    display:flex;
+                    display:inline-flex;
                     align-items:center;
-                    gap:12px;
-                    padding:15px;
-                    margin-bottom:10px;
+                    gap:7px;
+                    padding:9px 11px;
+                    margin:0;
                     background:#08080e;
                     border:1px solid #30303b;
-                    border-radius:14px;
+                    border-radius:10px;
                     cursor:pointer;
+                    flex:1 1 180px;
                 ">
                     <input
                         type="checkbox"
@@ -2026,9 +2034,10 @@ RESULT_HTML = """
                         🎤 Добавлять голос за кадром
                     </span>
                 </label>
+                </div>
 
                 <div style="
-                    margin-top:18px;
+                    margin-top:10px;
                     margin-bottom:8px;
                     font-size:15px;
                     font-weight:700;
@@ -2040,13 +2049,13 @@ RESULT_HTML = """
                     name="editor_subtitle_position"
                     style="
                         width:100%;
-                        padding:15px;
-                        border-radius:14px;
+                        padding:10px 12px;
+                        border-radius:10px;
                         border:1px solid #30303b;
                         background:#08080e;
                         color:#fff;
-                        font-size:16px;
-                        margin-bottom:18px;
+                        font-size:14px;
+                        margin-bottom:12px;
                     "
                 >
                     <option value="bottom">Снизу</option>
@@ -2066,9 +2075,9 @@ RESULT_HTML = """
                     required
                     style="
                         width:100%;
-                        min-height:280px;
-                        padding:18px;
-                        border-radius:16px;
+                        min-height:420px;
+                        padding:16px;
+                        border-radius:14px;
                         border:1px solid #3a3a4a;
                         background:#08080e;
                         color:#fff;
@@ -2087,9 +2096,9 @@ RESULT_HTML = """
                         width:100%;
                         border:0;
                         cursor:pointer;
-                        margin-top:16px;
-                        font-size:18px;
-                        padding:18px;
+                        margin-top:12px;
+                        font-size:16px;
+                        padding:13px;
                     "
                 >
                     🔄 Создать новую версию
