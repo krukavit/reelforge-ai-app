@@ -5014,6 +5014,60 @@ h1{
 
 </div>
 
+<script>
+(function () {
+    const providerInputs = document.querySelectorAll('input[name="ai_provider"]');
+    const modelSelect = document.querySelector('select[name="ai_model"]');
+
+    if (!providerInputs.length || !modelSelect) return;
+
+    const allOptions = Array.from(modelSelect.options);
+
+    function updateModels() {
+        const provider = document.querySelector(
+            'input[name="ai_provider"]:checked'
+        )?.value;
+
+        if (!provider) return;
+
+        const current = modelSelect.value;
+
+        allOptions.forEach(option => {
+            const isOpenAI =
+                option.value === "gpt-5.4-mini" ||
+                option.value === "gpt-5.6-luna";
+
+            const isGroq =
+                option.value === "openai/gpt-oss-120b";
+
+            option.hidden =
+                (provider === "openai" && !isOpenAI) ||
+                (provider === "groq" && !isGroq);
+        });
+
+        const currentAllowed =
+            (provider === "openai" &&
+                (current === "gpt-5.4-mini" ||
+                 current === "gpt-5.6-luna")) ||
+            (provider === "groq" &&
+                current === "openai/gpt-oss-120b");
+
+        if (!currentAllowed) {
+            modelSelect.value =
+                provider === "groq"
+                    ? "openai/gpt-oss-120b"
+                    : "gpt-5.4-mini";
+        }
+    }
+
+    providerInputs.forEach(input => {
+        input.addEventListener("change", updateModels);
+    });
+
+    updateModels();
+})();
+</script>
+
 </body>
 </html>
 """
