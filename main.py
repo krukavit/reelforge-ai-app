@@ -67,6 +67,22 @@ def init_db():
                 )
             """)
 
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    ai_provider TEXT NOT NULL DEFAULT 'groq',
+                    ai_model TEXT NOT NULL DEFAULT 'openai/gpt-oss-120b',
+                    plan TEXT NOT NULL DEFAULT 'free',
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            cur.execute("""
+                INSERT INTO app_settings (id)
+                VALUES (1)
+                ON CONFLICT (id) DO NOTHING
+            """)
+
         # Безопасная миграция существующей базы:
         # добавляем счётчик бесплатных входов, если его ещё нет.
         with conn.cursor() as cur:
@@ -86,6 +102,67 @@ def init_db():
             """)
 
         conn.commit()
+
+
+
+def get_app_settings():
+    """Возвращает глобальные настройки ReelForge AI."""
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT ai_provider, ai_model, plan
+                FROM app_settings
+                WHERE id = 1
+            """)
+            row = cur.fetchone()
+
+    if not row:
+        return {
+            "ai_provider": "groq",
+            "ai_model": "openai/gpt-oss-120b",
+            "plan": "free",
+        }
+
+    return {
+        "ai_provider": row[0],
+        "ai_model": row[1],
+        "plan": row[2],
+    }
+
+
+def save_app_settings(ai_provider, ai_model, plan):
+    """Сохраняет глобальные настройки ReelForge AI."""
+    allowed_providers = {"openai", "groq"}
+    allowed_plans = {"free", "basic", "pro", "unlimited"}
+
+    if ai_provider not in allowed_providers:
+        raise ValueError("Некорректный AI provider")
+
+    if plan not in allowed_plans:
+        raise ValueError("Некорректный тариф")
+
+    with db_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO app_settings
+                    (id, ai_provider, ai_model, plan, updated_at)
+                VALUES
+                    (1, %s, %s, %s, NOW())
+                ON CONFLICT (id)
+                DO UPDATE SET
+                    ai_provider = EXCLUDED.ai_provider,
+                    ai_model = EXCLUDED.ai_model,
+                    plan = EXCLUDED.plan,
+                    updated_at = NOW()
+            """, (ai_provider, ai_model, plan))
+
+        conn.commit()
+
+    print(
+        f"[ADMIN] settings saved provider={ai_provider} "
+        f"model={ai_model} plan={plan}",
+        flush=True
+    )
 
 
 def ensure_user(user_key):
@@ -4677,6 +4754,349 @@ def admin_reset_free():
     except Exception as e:
         print(f"[ADMIN] RESET ERROR: {e}", flush=True)
         return "Ошибка сброса счётчика", 500
+
+
+
+@app.route("/admin/settings", methods=["GET", "POST"])
+def admin_settings():
+    """Настройки AI-провайдера, модели и тарифа ReelForge AI."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "") or request.form.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    try:
+        if request.method == "POST":
+            ai_provider = (request.form.get("ai_provider") or "groq").strip().lower()
+            ai_model = (request.form.get("ai_model") or "").strip()
+            plan = (request.form.get("plan") or "free").strip().lower()
+
+            allowed_models = {
+                "openai": {
+                    "gpt-5.4-mini",
+                    "gpt-5.6-luna",
+                },
+                "groq": {
+                    "openai/gpt-oss-120b",
+                },
+            }
+
+            if ai_provider not in {"openai", "groq"}:
+                return "Некорректный AI provider", 400
+
+            if ai_model not in allowed_models[ai_provider]:
+                return "Некорректная модель", 400
+
+            if plan not in {"free", "basic", "pro", "unlimited"}:
+                return "Некорректный тариф", 400
+
+            save_app_settings(ai_provider, ai_model, plan)
+
+            return redirect(
+                "/admin/settings?key="
+                + admin_key
+                + "&saved=1"
+            )
+
+        settings = get_app_settings()
+        saved = request.args.get("saved") == "1"
+
+        html = """
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>ReelForge AI — Settings</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    background:#07070d;
+    color:#fff;
+    font-family:Arial,sans-serif;
+}
+
+.container{
+    max-width:850px;
+    margin:auto;
+    padding:30px 16px 60px;
+}
+
+h1{
+    margin:0 0 8px;
+}
+
+.subtitle{
+    color:#999;
+    margin-bottom:25px;
+}
+
+.card{
+    background:#11111a;
+    border:1px solid #292936;
+    border-radius:16px;
+    padding:22px;
+    margin-bottom:18px;
+}
+
+.card h2{
+    margin:0 0 16px;
+    font-size:19px;
+}
+
+.options{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:12px;
+}
+
+.option{
+    position:relative;
+}
+
+.option input{
+    position:absolute;
+    opacity:0;
+}
+
+.option label{
+    display:block;
+    padding:18px;
+    border:1px solid #333;
+    border-radius:12px;
+    cursor:pointer;
+    background:#0c0c14;
+}
+
+.option input:checked + label{
+    border-color:#7c3aed;
+    background:#1b132d;
+    box-shadow:0 0 0 1px #7c3aed;
+}
+
+.option-title{
+    font-size:17px;
+    font-weight:bold;
+}
+
+.option-desc{
+    color:#999;
+    font-size:13px;
+    margin-top:5px;
+}
+
+select{
+    width:100%;
+    padding:14px;
+    border-radius:10px;
+    border:1px solid #333;
+    background:#0c0c14;
+    color:white;
+    font-size:15px;
+}
+
+button{
+    width:100%;
+    padding:15px;
+    border:0;
+    border-radius:11px;
+    background:#7c3aed;
+    color:white;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.status{
+    padding:14px;
+    border-radius:10px;
+    background:#09251d;
+    border:1px solid #065f46;
+    color:#6ee7b7;
+    margin-bottom:18px;
+}
+
+.back{
+    display:inline-block;
+    color:#a78bfa;
+    text-decoration:none;
+    margin-bottom:20px;
+}
+
+@media(max-width:650px){
+    .options{
+        grid-template-columns:1fr;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<a class="back"
+   href="/admin/users?key={{ admin_key }}">
+   ← Назад к пользователям
+</a>
+
+<h1>⚙️ ReelForge AI — Настройки</h1>
+
+<div class="subtitle">
+Глобальные настройки AI и тарифного режима
+</div>
+
+{% if saved %}
+<div class="status">
+✅ Настройки успешно сохранены
+</div>
+{% endif %}
+
+<form method="post">
+
+<input type="hidden" name="key" value="{{ admin_key }}">
+
+<div class="card">
+
+<h2>🤖 AI-провайдер</h2>
+
+<div class="options">
+
+<div class="option">
+<input
+    id="provider_openai"
+    type="radio"
+    name="ai_provider"
+    value="openai"
+    {% if settings.ai_provider == "openai" %}checked{% endif %}
+>
+<label for="provider_openai">
+    <div class="option-title">OpenAI</div>
+    <div class="option-desc">GPT для генерации сценариев и структуры Reel</div>
+</label>
+</div>
+
+<div class="option">
+<input
+    id="provider_groq"
+    type="radio"
+    name="ai_provider"
+    value="groq"
+    {% if settings.ai_provider == "groq" %}checked{% endif %}
+>
+<label for="provider_groq">
+    <div class="option-title">Groq</div>
+    <div class="option-desc">Быстрая генерация через Groq API</div>
+</label>
+</div>
+
+</div>
+</div>
+
+<div class="card">
+
+<h2>🧠 Модель</h2>
+
+<select name="ai_model">
+
+<option
+    value="gpt-5.4-mini"
+    {% if settings.ai_model == "gpt-5.4-mini" %}selected{% endif %}
+>
+OpenAI — GPT-5.4 Mini
+</option>
+
+<option
+    value="gpt-5.6-luna"
+    {% if settings.ai_model == "gpt-5.6-luna" %}selected{% endif %}
+>
+OpenAI — GPT-5.6 Luna
+</option>
+
+<option
+    value="openai/gpt-oss-120b"
+    {% if settings.ai_model == "openai/gpt-oss-120b" %}selected{% endif %}
+>
+Groq — GPT-OSS 120B
+</option>
+
+</select>
+
+</div>
+
+<div class="card">
+
+<h2>💳 Тарифный режим</h2>
+
+<div class="options">
+
+<div class="option">
+<input id="plan_free" type="radio" name="plan" value="free"
+{% if settings.plan == "free" %}checked{% endif %}>
+<label for="plan_free">
+<div class="option-title">Free</div>
+<div class="option-desc">Бесплатный режим</div>
+</label>
+</div>
+
+<div class="option">
+<input id="plan_basic" type="radio" name="plan" value="basic"
+{% if settings.plan == "basic" %}checked{% endif %}>
+<label for="plan_basic">
+<div class="option-title">Basic</div>
+<div class="option-desc">Базовый платный тариф</div>
+</label>
+</div>
+
+<div class="option">
+<input id="plan_pro" type="radio" name="plan" value="pro"
+{% if settings.plan == "pro" %}checked{% endif %}>
+<label for="plan_pro">
+<div class="option-title">Pro</div>
+<div class="option-desc">Расширенный тариф</div>
+</label>
+</div>
+
+<div class="option">
+<input id="plan_unlimited" type="radio" name="plan" value="unlimited"
+{% if settings.plan == "unlimited" %}checked{% endif %}>
+<label for="plan_unlimited">
+<div class="option-title">Unlimited</div>
+<div class="option-desc">Без ограничения генераций</div>
+</label>
+</div>
+
+</div>
+
+</div>
+
+<button type="submit">
+💾 Сохранить настройки
+</button>
+
+</form>
+
+</div>
+
+</body>
+</html>
+"""
+
+        return render_template_string(
+            html,
+            settings=settings,
+            admin_key=admin_key,
+            saved=saved
+        )
+
+    except Exception as e:
+        print(f"[ADMIN] SETTINGS ERROR: {e}", flush=True)
+        return "Ошибка настроек", 500
 
 
 @app.route("/admin/users")
