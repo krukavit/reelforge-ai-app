@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="360" viewBox="0 0 1080 360">
+  <rect width="1080" height="360" rx="36" fill="#111118"/>
+  <rect x="3" y="3" width="1074" height="354" rx="33" fill="none" stroke="#3a3a4a" stroke-width="6"/>
+
+  <circle cx="180" cy="180" r="105" fill="#a855f7"/>
+  <text x="180" y="215" text-anchor="middle" font-size="120">🐱</text>
+
+  <text x="330" y="150" fill="white" font-family="Arial,sans-serif"
+        font-size="54" font-weight="800">ReelForge AI</text>
+
+  <text x="330" y="210" fill="#c4b5fd" font-family="Arial,sans-serif"
+        font-size="30" font-weight="700">Создавай Reels с AI</text>
+
+  <text x="330" y="265" fill="#9ca3af" font-family="Arial,sans-serif"
+        font-size="26">👆 Нажми на котика</text>
+</svg>

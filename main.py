@@ -2001,7 +2001,8 @@ RESULT_HTML = """
                 </div>
             </a>
 
-            <a href="/"
+            <a href="/static/reelforge-banner.svg"
+               download="ReelForge-AI-banner.svg"
                style="
                    display:block;
                    text-align:center;
