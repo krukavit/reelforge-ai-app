@@ -122,7 +122,7 @@ def check_access():
     # ============================================================
     # ADMIN — НИКОГДА НЕ ОТПРАВЛЯЕМ НА PAYMENT
     # ============================================================
-    if request.path.startswith("/admin/"):
+    if request.path == "/admin" or request.path.startswith("/admin/"):
         return None
 
     user_key = request.cookies.get(USER_COOKIE_NAME)
