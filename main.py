@@ -868,7 +868,7 @@ def generate_prompt_scene_plan(topic):
                 "content": user_prompt
             }
         ],
-        max_tokens=1400
+        max_completion_tokens=1400
     )
 
     raw = response.choices[0].message.content.strip()
@@ -2323,7 +2323,7 @@ def generate_script(topic):
                 "content": task
             }
         ],
-        max_tokens=800
+        max_completion_tokens=800
     )
 
     return response.choices[0].message.content
@@ -2384,7 +2384,7 @@ def generate_voiceover_text(scene_plan):
 Создай единый текст для voice-over этого Reels."""
             }
         ],
-        max_tokens=700
+        max_completion_tokens=700
     )
 
     text = (response.choices[0].message.content or "").strip()
@@ -2421,7 +2421,7 @@ def generate_captions(topic, count):
 Создай ровно {count} коротких субтитров по этому сценарию.
 Формат: ["фраза1", "фраза2", "..."]"""}
             ],
-            max_tokens=400
+            max_completion_tokens=400
         )
         text = response.choices[0].message.content.strip()
         text = re.sub(r"^```(json)?", "", text).strip()
@@ -3927,7 +3927,7 @@ def prepare_prompt():
                     "content": topic
                 }
             ],
-            max_tokens=1000
+            max_completion_tokens=1000
         )
 
         prepared_prompt = (
