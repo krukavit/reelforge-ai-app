@@ -741,6 +741,8 @@ def generate_prompt_scene_plan(topic):
 {
   "title": "название ролика",
   "duration": 40,
+  "use_captions": true,
+  "use_voiceover": true,
   "scenes": [
     {
       "caption": "описание сцены",
@@ -808,6 +810,8 @@ def generate_prompt_scene_plan(topic):
     result = {
         "title": str(plan.get("title", "")).strip()[:200],
         "duration": duration,
+        "use_captions": bool(plan.get("use_captions", False)),
+        "use_voiceover": bool(plan.get("use_voiceover", False)),
         "scenes": clean_scenes,
     }
 
@@ -1838,40 +1842,147 @@ RESULT_HTML = """
         {% endif %}
 
         {% if topic %}
-        <div class="script" style="margin-top:24px;">
-            <div style="font-size:18px;font-weight:700;margin-bottom:10px;">
-                ✏️ Промт для редактирования
+        <div class="script" style="
+            margin-top:28px;
+            padding:24px;
+            background:#111118;
+            border:1px solid #3a3a4a;
+            border-radius:20px;
+        ">
+            <div style="
+                font-size:22px;
+                font-weight:800;
+                margin-bottom:8px;
+            ">
+                ✏️ Редактор новой версии
             </div>
 
-            <p style="color:#9ca3af;font-size:14px;margin:0 0 12px;">
-                Измени промт и создай новую версию ролика.
+            <p style="
+                color:#9ca3af;
+                font-size:15px;
+                line-height:1.5;
+                margin:0 0 20px;
+            ">
+                Видео сверху — редактор снизу.
+                Измени требования и быстро создай новую версию.
             </p>
 
             <form action="/create_reel_from_prompt" method="post">
+
+                <label style="
+                    display:flex;
+                    align-items:center;
+                    gap:12px;
+                    padding:15px;
+                    margin-bottom:10px;
+                    background:#08080e;
+                    border:1px solid #30303b;
+                    border-radius:14px;
+                    cursor:pointer;
+                ">
+                    <input
+                        type="checkbox"
+                        name="editor_captions"
+                        value="1"
+                        style="width:22px;height:22px;"
+                        {% if 'титр' in topic.lower() or 'субтитр' in topic.lower() or 'captions' in topic.lower() or 'subtitles' in topic.lower() %}checked{% endif %}
+                    >
+                    <span style="font-size:16px;font-weight:700;">
+                        📝 Добавлять титры / текст на экране
+                    </span>
+                </label>
+
+                <label style="
+                    display:flex;
+                    align-items:center;
+                    gap:12px;
+                    padding:15px;
+                    margin-bottom:10px;
+                    background:#08080e;
+                    border:1px solid #30303b;
+                    border-radius:14px;
+                    cursor:pointer;
+                ">
+                    <input
+                        type="checkbox"
+                        name="editor_voiceover"
+                        value="1"
+                        style="width:22px;height:22px;"
+                        {% if 'голос за кадром' in topic.lower() or 'озвуч' in topic.lower() or 'voice-over' in topic.lower() or 'voiceover' in topic.lower() or 'narration' in topic.lower() %}checked{% endif %}
+                    >
+                    <span style="font-size:16px;font-weight:700;">
+                        🎤 Добавлять голос за кадром
+                    </span>
+                </label>
+
+                <div style="
+                    margin-top:18px;
+                    margin-bottom:8px;
+                    font-size:15px;
+                    font-weight:700;
+                ">
+                    📍 Положение титров
+                </div>
+
+                <select
+                    name="editor_subtitle_position"
+                    style="
+                        width:100%;
+                        padding:15px;
+                        border-radius:14px;
+                        border:1px solid #30303b;
+                        background:#08080e;
+                        color:#fff;
+                        font-size:16px;
+                        margin-bottom:18px;
+                    "
+                >
+                    <option value="bottom">Снизу</option>
+                    <option value="top">Сверху</option>
+                </select>
+
+                <div style="
+                    margin-bottom:8px;
+                    font-size:15px;
+                    font-weight:700;
+                ">
+                    📝 Промт
+                </div>
+
                 <textarea
                     name="topic"
                     required
                     style="
                         width:100%;
-                        min-height:130px;
-                        padding:14px;
-                        border-radius:12px;
-                        border:1px solid #30303b;
+                        min-height:280px;
+                        padding:18px;
+                        border-radius:16px;
+                        border:1px solid #3a3a4a;
                         background:#08080e;
                         color:#fff;
-                        font-size:16px;
-                        line-height:1.5;
+                        font-size:17px;
+                        line-height:1.6;
                         resize:vertical;
+                        outline:none;
+                        display:block;
                     "
                 >{{ topic }}</textarea>
 
                 <button
                     class="button download"
                     type="submit"
-                    style="border:0;cursor:pointer;margin-top:12px;"
+                    style="
+                        width:100%;
+                        border:0;
+                        cursor:pointer;
+                        margin-top:16px;
+                        font-size:18px;
+                        padding:18px;
+                    "
                 >
                     🔄 Создать новую версию
                 </button>
+
             </form>
         </div>
         {% endif %}
@@ -2105,6 +2216,72 @@ def generate_script(topic):
 
     return response.choices[0].message.content
 
+
+def generate_voiceover_text(scene_plan):
+    """
+    Создаёт текст для закадрового голоса на основе готового
+    плана сцен Prompt Mode.
+
+    Важно:
+    - не использует исходный пользовательский промт напрямую;
+    - использует только готовый план сцен;
+    - возвращает обычный текст без markdown.
+    """
+    scenes = scene_plan.get("scenes", []) if isinstance(scene_plan, dict) else []
+
+    if not scenes:
+        return ""
+
+    scene_text = "\n".join(
+        str(scene.get("caption", "")).strip()
+        for scene in scenes
+        if str(scene.get("caption", "")).strip()
+    )
+
+    if not scene_text:
+        return ""
+
+    client = get_groq_client()
+
+    response = client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[
+            {
+                "role": "system",
+                "content": """Ты — профессиональный сценарист voice-over для Instagram Reels.
+
+На вход ты получаешь готовые описания сцен.
+
+Создай короткий естественный текст для закадрового голоса.
+
+Правила:
+1. Используй только информацию, содержащуюся в сценах.
+2. Не придумывай факты.
+3. Текст должен звучать естественно при озвучке.
+4. Пиши динамично и коротко.
+5. Не используй markdown.
+6. Не добавляй заголовок или пояснения.
+7. Верни только готовый текст voice-over."""
+            },
+            {
+                "role": "user",
+                "content": f"""ГОТОВЫЕ СЦЕНЫ:
+
+{scene_text}
+
+Создай единый текст для voice-over этого Reels."""
+            }
+        ],
+        max_tokens=700
+    )
+
+    text = (response.choices[0].message.content or "").strip()
+
+    text = re.sub(r"^```(?:text)?", "", text).strip()
+    text = re.sub(r"```$", "", text).strip()
+
+    return text
+
 def generate_captions(topic, count):
     client = get_groq_client()
     try:
@@ -2219,18 +2396,28 @@ def parse_target_duration(topic):
 
 def parse_video_instructions(topic):
     """
-    Извлекает технические инструкции из темы ролика.
-    По умолчанию:
-      crop_mode = pad
-      subtitle_position = bottom
+    Извлекает технические требования из пользовательского промта.
+
+    Возвращает:
+      crop_mode
+      subtitle_position
+      use_captions
+      use_voiceover
+      effects
     """
     text = (topic or "").lower().strip()
 
     instructions = {
         "crop_mode": "pad",
         "subtitle_position": "bottom",
+        "use_captions": False,
+        "use_voiceover": False,
         "effects": [],
     }
+
+    # ============================================================
+    # КАДРИРОВАНИЕ
+    # ============================================================
 
     crop_patterns = [
         r"\bcrop\b",
@@ -2247,6 +2434,15 @@ def parse_video_instructions(topic):
         r"сохранить\s+весь\s+кадр",
     ]
 
+    if any(re.search(pattern, text) for pattern in pad_patterns):
+        instructions["crop_mode"] = "pad"
+    elif any(re.search(pattern, text) for pattern in crop_patterns):
+        instructions["crop_mode"] = "cover"
+
+    # ============================================================
+    # ПОЗИЦИЯ ТИТРОВ
+    # ============================================================
+
     subtitle_top_patterns = [
         r"subtitle\s+top",
         r"subtitles\s+top",
@@ -2261,34 +2457,102 @@ def parse_video_instructions(topic):
         r"текст\s+(?:снизу|внизу)",
     ]
 
-    # Явный запрет обрезки имеет приоритет над crop/cover.
-    if any(re.search(pattern, text) for pattern in pad_patterns):
-        instructions["crop_mode"] = "pad"
-    elif any(re.search(pattern, text) for pattern in crop_patterns):
-        instructions["crop_mode"] = "cover"
-
     if any(re.search(pattern, text) for pattern in subtitle_top_patterns):
         instructions["subtitle_position"] = "top"
     elif any(re.search(pattern, text) for pattern in subtitle_bottom_patterns):
         instructions["subtitle_position"] = "bottom"
 
-    # Визуальные эффекты камеры
-    if re.search(r"зум[- ]?ин|zoom[- ]?in|приближ", text):
-        instructions["effects"].append("zoom_in")
+    # ============================================================
+    # ТИТРЫ / СУБТИТРЫ
+    # ============================================================
 
-    if re.search(r"зум[- ]?аут|zoom[- ]?out|отъезж|отдал", text):
-        instructions["effects"].append("zoom_out")
+    captions_enable_patterns = [
+        r"\bс\s+титрами\b",
+        r"\bс\s+субтитрами\b",
+        r"\bдобав(?:ь|ить)\s+титр",
+        r"\bдобав(?:ь|ить)\s+субтитр",
+        r"\bпокажи\s+текст\b",
+        r"\bтекст\s+на\s+экране\b",
+        r"\bтекст\s+поверх\s+видео\b",
+        r"\bcaptions?\b",
+        r"\bsubtitles?\b",
+        r"\bon[- ]screen\s+text\b",
+        r"\btext\s+on\s+screen\b",
+    ]
 
-    if re.search(r"световой всплеск|вспышк|flash", text):
-        instructions["effects"].append("flash")
+    captions_disable_patterns = [
+        r"\bбез\s+титров\b",
+        r"\bбез\s+субтитров\b",
+        r"\bне\s+добавляй\s+титры\b",
+        r"\bне\s+добавляй\s+субтитры\b",
+        r"\bбез\s+текста\s+на\s+экране\b",
+        r"\bno\s+captions?\b",
+        r"\bno\s+subtitles?\b",
+        r"\bno\s+on[- ]screen\s+text\b",
+    ]
+
+    captions_requested = any(
+        re.search(pattern, text)
+        for pattern in captions_enable_patterns
+    )
+
+    captions_forbidden = any(
+        re.search(pattern, text)
+        for pattern in captions_disable_patterns
+    )
+
+    if captions_requested and not captions_forbidden:
+        instructions["use_captions"] = True
+
+    # ============================================================
+    # ГОЛОС ЗА КАДРОМ / VOICE-OVER
+    # ============================================================
+
+    voice_enable_patterns = [
+        r"голос\s+за\s+кадром",
+        r"озвучк(?:а|у|ой)",
+        r"озвуч(?:ь|ить|ка)",
+        r"диктор",
+        r"дикторская\s+озвучка",
+        r"закадров(?:ый|ая|ое)\s+голос",
+        r"voice[- ]?over",
+        r"voiceover",
+        r"narration",
+        r"narrator",
+        r"spoken\s+voice",
+    ]
+
+    voice_disable_patterns = [
+        r"без\s+голоса",
+        r"без\s+озвучки",
+        r"без\s+голоса\s+за\s+кадром",
+        r"не\s+добавляй\s+голос",
+        r"не\s+добавляй\s+озвучку",
+        r"no\s+voice[- ]?over",
+        r"no\s+voiceover",
+        r"no\s+narration",
+    ]
+
+    voice_requested = any(
+        re.search(pattern, text)
+        for pattern in voice_enable_patterns
+    )
+
+    voice_forbidden = any(
+        re.search(pattern, text)
+        for pattern in voice_disable_patterns
+    )
+
+    if voice_requested and not voice_forbidden:
+        instructions["use_voiceover"] = True
 
     print(
-        "[INSTRUCTIONS] crop_mode="
-        + instructions["crop_mode"]
-        + " subtitle_position="
-        + instructions["subtitle_position"]
-        + " effects="
-        + str(instructions["effects"]),
+        "[INSTRUCTIONS] "
+        + "crop_mode=" + instructions["crop_mode"]
+        + " subtitle_position=" + instructions["subtitle_position"]
+        + " use_captions=" + str(instructions["use_captions"])
+        + " use_voiceover=" + str(instructions["use_voiceover"])
+        + " effects=" + str(instructions["effects"]),
         flush=True,
     )
 
@@ -2959,6 +3223,56 @@ def select_prompt_music(topic=""):
         return None
 
 
+
+def generate_voiceover_audio(text, output_path):
+    """
+    Создаёт MP3 voice-over через gTTS.
+    """
+    text = (text or "").strip()
+
+    if not text:
+        raise RuntimeError("VOICEOVER TEXT IS EMPTY")
+
+    try:
+        from gtts import gTTS
+
+        print(
+            f"[VOICEOVER] GENERATING text_length={len(text)}",
+            flush=True
+        )
+
+        tts = gTTS(
+            text=text,
+            lang="ru",
+            slow=False,
+        )
+
+        tts.save(output_path)
+
+        if not os.path.exists(output_path):
+            raise RuntimeError("VOICEOVER FILE NOT CREATED")
+
+        size = os.path.getsize(output_path)
+
+        if size < 1000:
+            raise RuntimeError(
+                f"VOICEOVER FILE TOO SMALL: {size}"
+            )
+
+        print(
+            f"[VOICEOVER] COMPLETE output={output_path} size={size}",
+            flush=True
+        )
+
+        return output_path
+
+    except Exception as e:
+        print(
+            f"[VOICEOVER] ERROR: {e}",
+            flush=True
+        )
+        raise
+
 def mux_music(video_path, music_path, output_path):
     if not os.path.exists(video_path):
         raise RuntimeError(f"VIDEO NOT FOUND: {video_path}")
@@ -3008,7 +3322,19 @@ def mux_music(video_path, music_path, output_path):
         flush=True
     )
 
-def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, preset_captions=None, target_duration_override=None):
+def process_video_job(
+    job_id,
+    job_dir,
+    files_meta,
+    music_path,
+    topic,
+    mode,
+    preset_captions=None,
+    target_duration_override=None,
+    use_captions=None,
+    use_voiceover=False,
+    voiceover_text=None,
+):
     print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
     try:
         script = None
@@ -3022,14 +3348,29 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
             instructions["_prompt_mode"] = True
 
         # PROMPT MODE:
-        # не генерируем отдельный сценарий и НЕ добавляем титры.
-        # Пользовательский промт используется как основа для
-        # плана сцен, визуалов, музыки и монтажа.
+        # Пользовательский промт является главным источником
+        # требований к ролику.
         if mode == "prompt":
             script = None
-            captions = []
+
+            if use_captions is True:
+                if preset_captions:
+                    captions = list(preset_captions)[:len(files_meta)]
+                else:
+                    captions = []
+                print(
+                    f"[AI CAPTIONS] PROMPT MODE ENABLED count={len(captions)}",
+                    flush=True
+                )
+            else:
+                captions = []
+                print(
+                    "[AI CAPTIONS] PROMPT MODE DISABLED",
+                    flush=True
+                )
+
             print(
-                "[AI CAPTIONS] PROMPT MODE captions DISABLED",
+                f"[AI VOICEOVER] enabled={bool(use_voiceover)}",
                 flush=True
             )
 
@@ -3070,6 +3411,38 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
 
         silent_path = os.path.join(OUTPUT_DIR, f"{job_id}_silent.mp4")
 
+        # ============================================================
+        # VOICE-OVER
+        # ============================================================
+        voiceover_path = None
+
+        if mode == "prompt" and use_voiceover:
+            try:
+                if not voiceover_text:
+                    raise RuntimeError("VOICEOVER TEXT NOT PROVIDED")
+
+                voiceover_path = os.path.join(
+                    job_dir,
+                    "voiceover.mp3"
+                )
+
+                generate_voiceover_audio(
+                    voiceover_text,
+                    voiceover_path
+                )
+
+                print(
+                    f"[AI VOICEOVER] READY path={voiceover_path}",
+                    flush=True
+                )
+
+            except Exception as e:
+                print(
+                    f"[AI VOICEOVER] ERROR: {e}",
+                    flush=True
+                )
+                raise
+
         if target_duration_override:
             target_duration = float(target_duration_override)
             print(
@@ -3100,10 +3473,117 @@ def process_video_job(job_id, job_dir, files_meta, music_path, topic, mode, pres
 
         print(f"[JOB {job_id}] RENDER COMPLETE silent={silent_path}", flush=True)
         final_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
-        if music_path:
-            mux_music(silent_path, music_path, final_path)
+
+        # ============================================================
+        # AUDIO MIX
+        # video + background music + voice-over
+        # ============================================================
+        if voiceover_path and music_path:
+            print(
+                f"[AUDIO MIX] video={silent_path} "
+                f"music={music_path} "
+                f"voiceover={voiceover_path}",
+                flush=True
+            )
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", silent_path,
+                "-stream_loop", "-1", "-i", music_path,
+                "-i", voiceover_path,
+
+                "-filter_complex",
+                "[1:a]volume=0.22[music];"
+                "[2:a]volume=1.0[voice];"
+                "[music][voice]amix=inputs=2:duration=first:dropout_transition=2[aout]",
+
+                "-map", "0:v:0",
+                "-map", "[aout]",
+
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-shortest",
+                "-movflags", "+faststart",
+                final_path,
+            ]
+
+            print(
+                f"[AUDIO MIX] FFMPEG START: {cmd}",
+                flush=True
+            )
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode != 0:
+                print(
+                    f"[AUDIO MIX] FFMPEG ERROR: {result.stderr[-3000:]}",
+                    flush=True
+                )
+                raise RuntimeError(
+                    f"[AUDIO MIX exit code {result.returncode}] "
+                    + result.stderr[-1000:]
+                )
+
+            if not os.path.exists(final_path):
+                raise RuntimeError(
+                    "AUDIO MIX OUTPUT NOT CREATED"
+                )
+
+            print(
+                f"[AUDIO MIX] COMPLETE output={final_path} "
+                f"size={os.path.getsize(final_path)}",
+                flush=True
+            )
+
+        elif voiceover_path:
+            print(
+                f"[AUDIO MIX] voiceover only={voiceover_path}",
+                flush=True
+            )
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", silent_path,
+                "-i", voiceover_path,
+                "-map", "0:v:0",
+                "-map", "1:a:0",
+                "-c:v", "copy",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-shortest",
+                "-movflags", "+faststart",
+                final_path,
+            ]
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"[VOICEOVER MIX exit code {result.returncode}] "
+                    + result.stderr[-1000:]
+                )
+
+        elif music_path:
+            mux_music(
+                silent_path,
+                music_path,
+                final_path
+            )
+
         else:
-            shutil.copy(silent_path, final_path)
+            shutil.copy(
+                silent_path,
+                final_path
+            )
 
         print(f"[JOB {job_id}] DONE final={final_path}", flush=True)
         set_job(
@@ -3320,10 +3800,13 @@ def prepare_prompt():
 4. Опиши визуальный стиль, атмосферу, последовательность сцен и динамику монтажа.
 5. Укажи, какие реальные визуалы нужно искать.
 6. Не придумывай несуществующие факты.
-7. Не добавляй голос за кадром, если пользователь этого не просил.
-8. Фоновую музыку можно использовать автоматически.
-9. НЕ добавляй титры, субтитры или текст поверх видео, если пользователь прямо этого не попросил.
-10. Верни только готовый промт, без пояснений и без кавычек.
+7. Если пользователь явно попросил голос за кадром, voice-over, озвучку или narration — обязательно сохрани это требование в готовом промте.
+8. Если пользователь явно попросил титры, субтитры или текст на экране — обязательно сохрани это требование в готовом промте.
+9. Если пользователь не просил голос за кадром — не добавляй его самостоятельно.
+10. Если пользователь не просил титры или субтитры — не добавляй их самостоятельно.
+11. Фоновую музыку можно использовать автоматически, если пользователь не указал другое.
+12. Никогда не удаляй и не ослабляй явные требования пользователя.
+13. Верни только готовый промт, без пояснений и без кавычек.
 
 Промт должен быть написан естественным человеческим языком и готов для дальнейшего редактирования пользователем."""
                 },
@@ -3364,6 +3847,18 @@ def prepare_prompt():
 def create_reel_from_prompt():
     topic = request.form.get("topic", "").strip()
 
+    # Настройки редактора Prompt Mode.
+    # Чекбоксы явно определяют, нужны ли титры и voice-over.
+    editor_use_captions = request.form.get("editor_captions") == "1"
+    editor_use_voiceover = request.form.get("editor_voiceover") == "1"
+    editor_subtitle_position = request.form.get(
+        "editor_subtitle_position",
+        "bottom"
+    )
+
+    if editor_subtitle_position not in ("top", "bottom"):
+        editor_subtitle_position = "bottom"
+
     if not topic:
         return "Введи промт для создания Reels!", 400
 
@@ -3386,6 +3881,9 @@ def create_reel_from_prompt():
         status="processing",
         mode="prompt",
         topic=topic,
+        editor_use_captions=editor_use_captions,
+        editor_use_voiceover=editor_use_voiceover,
+        editor_subtitle_position=editor_subtitle_position,
     )
 
     def run_prompt_job():
@@ -3397,6 +3895,42 @@ def create_reel_from_prompt():
 
             # 1. AI создаёт план сцен.
             scene_plan = generate_prompt_scene_plan(topic)
+
+            # Настройки редактора имеют приоритет над тем,
+            # что AI предположил в плане.
+            scene_plan["use_captions"] = editor_use_captions
+            scene_plan["use_voiceover"] = editor_use_voiceover
+
+            if editor_use_captions:
+                topic_for_render = (
+                    topic
+                    + "\n\n"
+                    + f"Титры на экране: включены. "
+                    f"Положение титров: {editor_subtitle_position}."
+                )
+            else:
+                topic_for_render = (
+                    topic
+                    + "\n\n"
+                    + "Титры на экране: выключены."
+                )
+
+            if editor_use_voiceover:
+                topic_for_render += (
+                    "\nVoice-over: включён."
+                )
+            else:
+                topic_for_render += (
+                    "\nVoice-over: выключен."
+                )
+
+            print(
+                f"[EDITOR FLAGS] "
+                f"captions={editor_use_captions} "
+                f"voiceover={editor_use_voiceover} "
+                f"subtitle_position={editor_subtitle_position}",
+                flush=True
+            )
 
             set_job(
                 job_id,
@@ -3447,18 +3981,50 @@ def create_reel_from_prompt():
                 flush=True
             )
 
-            # PROMPT MODE: титры не используются.
-            # AI-план отвечает только за визуалы, длительность и монтаж.
+            # PROMPT MODE:
+            # Передаём в рендер реальные требования пользователя.
+            #
+            # Если AI определил титры — используем текст caption
+            # из каждой сцены как текст на экране.
+            prompt_captions = None
+            if scene_plan.get("use_captions"):
+                prompt_captions = [
+                    str(scene.get("caption", "")).strip()
+                    for scene in scene_plan.get("scenes", [])
+                ]
+
+            prompt_use_captions = bool(scene_plan.get("use_captions", False))
+            prompt_use_voiceover = bool(scene_plan.get("use_voiceover", False))
+
+            prompt_voiceover_text = None
+
+            if prompt_use_voiceover:
+                prompt_voiceover_text = generate_voiceover_text(scene_plan)
+                print(
+                    f"[PROMPT VOICEOVER TEXT] length={len(prompt_voiceover_text or '')}",
+                    flush=True
+                )
+
+            print(
+                f"[PROMPT RENDER FLAGS] "
+                f"use_captions={prompt_use_captions} "
+                f"use_voiceover={prompt_use_voiceover} "
+                f"captions={len(prompt_captions or [])}",
+                flush=True
+            )
 
             process_video_job(
                 job_id,
                 job_dir,
                 media_files,
                 music_path,
-                topic,
+                topic_for_render,
                 "prompt",
-                preset_captions=None,
+                preset_captions=prompt_captions,
                 target_duration_override=scene_plan.get("duration"),
+                use_captions=prompt_use_captions,
+                use_voiceover=prompt_use_voiceover,
+                voiceover_text=prompt_voiceover_text,
             )
 
 
