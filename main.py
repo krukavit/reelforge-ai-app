@@ -853,8 +853,8 @@ def generate_prompt_scene_plan(topic):
 {
   "title": "название ролика",
   "duration": 40,
-  "use_captions": true,
-  "use_voiceover": true,
+  "use_captions": false,
+  "use_voiceover": false,
   "scenes": [
     {
       "caption": "описание сцены",
