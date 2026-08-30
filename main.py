@@ -83,6 +83,89 @@ def init_db():
                 ON CONFLICT (id) DO NOTHING
             """)
 
+
+            # ============================================================
+            # MARKETING PLATFORMS — реестр рекламных площадок
+            # ============================================================
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS marketing_platforms (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT UNIQUE NOT NULL,
+                    slug TEXT UNIQUE NOT NULL,
+                    website_url TEXT NOT NULL,
+                    api_url TEXT,
+                    api_method TEXT DEFAULT 'POST',
+                    automation_allowed BOOLEAN NOT NULL DEFAULT FALSE,
+                    auth_type TEXT,
+                    badge_required BOOLEAN NOT NULL DEFAULT FALSE,
+                    submission_status TEXT NOT NULL DEFAULT 'not_submitted',
+                    review_status TEXT NOT NULL DEFAULT 'unknown',
+                    publication_url TEXT,
+                    last_error TEXT,
+                    last_checked_at TIMESTAMPTZ,
+                    last_submitted_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS marketing_submissions (
+                    id SERIAL PRIMARY KEY,
+                    platform_id INTEGER NOT NULL
+                        REFERENCES marketing_platforms(id)
+                        ON DELETE CASCADE,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    request_data TEXT,
+                    response_data TEXT,
+                    publication_url TEXT,
+                    error TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+            """)
+
+            # Первая официально подключённая площадка.
+            # PromptFrenzy автоматически проверил badge и смёржил PR #46.
+            cur.execute("""
+                INSERT INTO marketing_platforms (
+                    name,
+                    slug,
+                    website_url,
+                    api_url,
+                    api_method,
+                    automation_allowed,
+                    auth_type,
+                    badge_required,
+                    submission_status,
+                    review_status,
+                    publication_url
+                )
+                VALUES (
+                    'PromptFrenzy',
+                    'promptfrenzy',
+                    'https://www.promptfrenzy.com',
+                    'https://www.promptfrenzy.com/api/directory/submit',
+                    'POST',
+                    TRUE,
+                    'none',
+                    TRUE,
+                    'verified',
+                    'merged',
+                    'https://github.com/Prompt-Frenzy/ai-directory/pull/46'
+                )
+                ON CONFLICT (slug) DO UPDATE SET
+                    api_url = EXCLUDED.api_url,
+                    api_method = EXCLUDED.api_method,
+                    automation_allowed = EXCLUDED.automation_allowed,
+                    auth_type = EXCLUDED.auth_type,
+                    badge_required = EXCLUDED.badge_required,
+                    submission_status = EXCLUDED.submission_status,
+                    review_status = EXCLUDED.review_status,
+                    publication_url = EXCLUDED.publication_url,
+                    updated_at = NOW()
+            """)
+
         # Безопасная миграция существующей базы:
         # добавляем счётчик бесплатных входов, если его ещё нет.
         with conn.cursor() as cur:
@@ -5086,6 +5169,15 @@ h1{
     </div>
 </a>
 
+<a class="admin-card"
+   href="/admin/marketing?key={{ admin_key }}">
+    <div class="admin-icon">📣</div>
+    <div class="admin-title">Маркетинговые площадки</div>
+    <div class="admin-desc">
+        PromptFrenzy и другие каталоги, API, публикации и статусы размещения.
+    </div>
+</a>
+
 </div>
 
 </div>
@@ -5162,6 +5254,186 @@ h1{
         html,
         admin_key=admin_key
     )
+
+
+
+@app.route("/admin/marketing")
+def admin_marketing():
+    """Управление маркетинговыми площадками."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    platforms = []
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT
+                        id,
+                        name,
+                        slug,
+                        website_url,
+                        api_url,
+                        api_method,
+                        automation_allowed,
+                        auth_type,
+                        badge_required,
+                        submission_status,
+                        review_status,
+                        publication_url,
+                        last_error,
+                        last_checked_at,
+                        last_submitted_at
+                    FROM marketing_platforms
+                    ORDER BY id
+                """)
+                platforms = cur.fetchall()
+    except Exception as e:
+        print(f"[ADMIN] MARKETING ERROR: {e}", flush=True)
+        return f"Ошибка загрузки площадок: {e}", 500
+
+    cards = ""
+
+    for row in platforms:
+        (
+            pid,
+            name,
+            slug,
+            website_url,
+            api_url,
+            api_method,
+            automation_allowed,
+            auth_type,
+            badge_required,
+            submission_status,
+            review_status,
+            publication_url,
+            last_error,
+            last_checked_at,
+            last_submitted_at,
+        ) = row
+
+        automation = "ВКЛ" if automation_allowed else "ВЫКЛ"
+        badge = "Да" if badge_required else "Нет"
+
+        error_html = ""
+        if last_error:
+            error_html = f'<div class="error"><b>Ошибка:</b> {last_error}</div>'
+
+        publication_html = ""
+        if publication_url:
+            publication_html = (
+                f'<a href="{publication_url}" target="_blank" rel="noopener">'
+                f'Открыть публикацию</a>'
+            )
+
+        cards += f"""
+        <section class="platform">
+          <div class="platform-head">
+            <div>
+              <h2>{name}</h2>
+              <div class="slug">{slug}</div>
+            </div>
+            <div class="status">
+              Публикация: {submission_status} · Проверка: {review_status}
+            </div>
+          </div>
+
+          <div class="grid">
+            <div><b>Сайт</b><br>
+              <a href="{website_url}" target="_blank" rel="noopener">
+                {website_url}
+              </a>
+            </div>
+
+            <div><b>API</b><br>
+              {api_method or "—"} {api_url or "—"}
+            </div>
+
+            <div><b>Автоматизация</b><br>{automation}</div>
+            <div><b>Badge</b><br>{badge}</div>
+            <div><b>Авторизация</b><br>{auth_type or "—"}</div>
+            <div><b>ID</b><br>{pid}</div>
+          </div>
+
+          {error_html}
+
+          <div class="actions">
+            <a class="button"
+               href="/admin/marketing/edit/{pid}?key={admin_key}">
+              ✏️ Редактировать
+            </a>
+
+            <a class="button secondary"
+               href="/admin/marketing/check/{pid}?key={admin_key}">
+              🔎 Проверить
+            </a>
+
+            {publication_html}
+          </div>
+        </section>
+        """
+
+    html = f"""
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ReelForge AI — Маркетинговые площадки</title>
+<style>
+*{{box-sizing:border-box}}
+body{{margin:0;background:#07070d;color:#fff;font-family:Arial,sans-serif}}
+.container{{max-width:950px;margin:auto;padding:28px 16px 60px}}
+.top{{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:28px}}
+h1{{margin:0;font-size:30px}}
+a{{color:#a78bfa}}
+.platform{{background:#11111a;border:1px solid #292936;border-radius:18px;padding:22px;margin-bottom:18px}}
+.platform-head{{display:flex;justify-content:space-between;gap:15px;align-items:center}}
+.platform h2{{margin:0 0 4px}}
+.slug{{color:#888;font-size:13px}}
+.status{{background:#191326;border:1px solid #51328c;border-radius:999px;padding:8px 12px;font-size:13px}}
+.grid{{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:20px;color:#bbb;font-size:14px;line-height:1.5}}
+.grid b{{color:#fff}}
+.actions{{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}}
+.button{{display:inline-block;padding:10px 15px;border-radius:10px;background:#7c3aed;color:#fff;text-decoration:none;font-weight:700}}
+.button.secondary{{background:#22222e}}
+.error{{margin-top:18px;padding:12px;border-radius:10px;background:#32151a;color:#ffb4b4}}
+.back{{color:#aaa;text-decoration:none}}
+@media(max-width:650px){{
+  .grid{{grid-template-columns:1fr}}
+  .platform-head{{align-items:flex-start;flex-direction:column}}
+}}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="top">
+    <div>
+      <h1>📣 Маркетинговые площадки</h1>
+      <div style="color:#999;margin-top:6px">
+        Управление каталогами, API и публикациями
+      </div>
+    </div>
+
+    <a class="back" href="/admin?key={admin_key}">
+      ← Админка
+    </a>
+  </div>
+
+  {cards or '<div class="platform">Площадки пока не добавлены.</div>'}
+
+</div>
+</body>
+</html>
+"""
+
+    return html
 
 
 @app.route("/admin/plans")
