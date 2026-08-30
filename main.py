@@ -5013,6 +5013,52 @@ h1{
     position:relative;
 }
 
+.provider-switch{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:10px;
+}
+
+.provider-option{
+    position:relative;
+}
+
+.provider-option input{
+    position:absolute;
+    opacity:0;
+    pointer-events:none;
+}
+
+.provider-option label{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:13px 15px;
+    border:1px solid #333;
+    border-radius:11px;
+    cursor:pointer;
+    background:#0c0c14;
+    transition:.15s;
+}
+
+.provider-option input:checked + label{
+    border-color:#7c3aed;
+    background:#1b132d;
+    box-shadow:0 0 0 1px #7c3aed;
+}
+
+.provider-name{
+    font-size:16px;
+    font-weight:700;
+}
+
+.provider-desc{
+    color:#999;
+    font-size:12px;
+}
+
 .option input{
     position:absolute;
     opacity:0;
@@ -5119,37 +5165,38 @@ button{
 
 <h2>🤖 AI-провайдер</h2>
 
-<div class="options">
+<div class="provider-switch">
 
-<div class="option">
-<input
-    id="provider_openai"
-    type="radio"
-    name="ai_provider"
-    value="openai"
-    {% if settings.ai_provider == "openai" %}checked{% endif %}
->
-<label for="provider_openai">
-    <div class="option-title">OpenAI</div>
-    <div class="option-desc">GPT для генерации сценариев и структуры Reel</div>
-</label>
+    <div class="provider-option">
+        <input
+            id="provider_openai"
+            type="radio"
+            name="ai_provider"
+            value="openai"
+            {% if settings.ai_provider == "openai" %}checked{% endif %}
+        >
+        <label for="provider_openai">
+            <span class="provider-name">OpenAI</span>
+            <span class="provider-desc">GPT</span>
+        </label>
+    </div>
+
+    <div class="provider-option">
+        <input
+            id="provider_groq"
+            type="radio"
+            name="ai_provider"
+            value="groq"
+            {% if settings.ai_provider == "groq" %}checked{% endif %}
+        >
+        <label for="provider_groq">
+            <span class="provider-name">Groq</span>
+            <span class="provider-desc">Быстрый AI</span>
+        </label>
+    </div>
+
 </div>
 
-<div class="option">
-<input
-    id="provider_groq"
-    type="radio"
-    name="ai_provider"
-    value="groq"
-    {% if settings.ai_provider == "groq" %}checked{% endif %}
->
-<label for="provider_groq">
-    <div class="option-title">Groq</div>
-    <div class="option-desc">Быстрая генерация через Groq API</div>
-</label>
-</div>
-
-</div>
 </div>
 
 <div class="card">
