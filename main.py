@@ -390,6 +390,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 _groq_client = None
+_openai_client = None
 _font_path = None
 
 JOBS = {}
@@ -418,6 +419,40 @@ def get_groq_client():
             raise ValueError("GROQ_API_KEY environment variable is not set")
         _groq_client = Groq(api_key=api_key)
     return _groq_client
+
+
+def get_openai_client():
+    global _openai_client
+
+    if _openai_client is None:
+        from openai import OpenAI
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is not set")
+
+        _openai_client = OpenAI(api_key=api_key)
+
+    return _openai_client
+
+
+def get_ai_client():
+    """
+    Возвращает клиента и модель согласно глобальным настройкам
+    ReelForge AI из PostgreSQL.
+    """
+    settings = get_app_settings()
+
+    provider = settings.get("ai_provider", "groq")
+    model = settings.get("ai_model", "openai/gpt-oss-120b")
+
+    if provider == "openai":
+        return get_openai_client(), model
+
+    if provider == "groq":
+        return get_groq_client(), model
+
+    raise ValueError(f"Неизвестный AI provider: {provider}")
 
 
 # ============================================================
@@ -786,14 +821,14 @@ def generate_prompt_scene_plan(topic):
     и показывается пользователю для редактирования.
     """
 
-    client = get_groq_client()
+    client, ai_model = get_ai_client()
 
     user_prompt = (topic or "").strip()
     if not user_prompt:
         raise ValueError("Пустой промт")
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=ai_model,
         messages=[
             {
                 "role": "system",
@@ -2244,7 +2279,7 @@ ERROR_HTML = """
 """
 
 def generate_script(topic):
-    client = get_groq_client()
+    client, ai_model = get_ai_client()
     user_prompt = (topic or "").strip()
 
     if user_prompt:
@@ -2265,7 +2300,7 @@ def generate_script(topic):
 """
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=ai_model,
         messages=[
             {
                 "role": "system",
@@ -2318,10 +2353,10 @@ def generate_voiceover_text(scene_plan):
     if not scene_text:
         return ""
 
-    client = get_groq_client()
+    client, ai_model = get_ai_client()
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=ai_model,
         messages=[
             {
                 "role": "system",
@@ -2360,10 +2395,10 @@ def generate_voiceover_text(scene_plan):
     return text
 
 def generate_captions(topic, count):
-    client = get_groq_client()
+    client, ai_model = get_ai_client()
     try:
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=ai_model,
             messages=[
                 {"role": "system", "content": """Ты — редактор субтитров для Instagram Reels.
 
@@ -3857,10 +3892,10 @@ def prepare_prompt():
         return "Введи идею для создания Reels!", 400
 
     try:
-        client = get_groq_client()
+        client, ai_model = get_ai_client()
 
         response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=ai_model,
             messages=[
                 {
                     "role": "system",
