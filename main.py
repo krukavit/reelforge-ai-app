@@ -3838,67 +3838,68 @@ PROMPT_PREVIEW_HTML = """
         }
 
         .editor-options {
-            margin-top: 18px;
-            padding: 16px;
-            border-radius: 14px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 12px;
             background: #0c0c13;
             border: 1px solid #272733;
         }
 
         .option-title {
-            font-size: 16px;
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 12px;
+            margin-bottom: 7px;
         }
 
         .option-row {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 14px;
-            padding: 13px 0;
-            border-top: 1px solid #20202a;
+            gap: 7px;
+            margin: 3px 18px 3px 0;
             cursor: pointer;
+            vertical-align: middle;
         }
 
-        .option-row:first-of-type {
-            border-top: 0;
+        .option-row span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .option-row b {
-            display: block;
-            font-size: 15px;
+            display: inline;
+            font-size: 13px;
         }
 
         .option-row small {
-            display: block;
-            margin-top: 4px;
-            color: #8f8f9d;
-            font-size: 12px;
+            display: none;
         }
 
         .option-row input[type="checkbox"] {
-            width: 22px;
-            height: 22px;
+            width: 18px;
+            height: 18px;
             accent-color: #a855f7;
             flex-shrink: 0;
         }
 
         .subtitle-position {
-            margin-top: 10px;
-            padding-top: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+            padding-top: 7px;
             border-top: 1px solid #20202a;
             color: #d1d1d8;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .position-title {
-            margin-bottom: 9px;
+            margin-right: 3px;
             font-weight: 600;
         }
 
         .subtitle-position label {
-            margin-right: 18px;
+            margin-right: 8px;
             cursor: pointer;
         }
 
@@ -3907,6 +3908,7 @@ PROMPT_PREVIEW_HTML = """
         }
 
         .original {
+
             margin-top: 20px;
             padding: 14px;
             border-radius: 12px;
