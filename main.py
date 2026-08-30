@@ -6242,6 +6242,46 @@ def collect_email():
     return response
 
 
+
+@app.route("/directory", methods=["GET"])
+def directory_page():
+    return """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ReelForge AI — AI Reel & Short Video Creator</title>
+  <meta name="description" content="ReelForge AI creates short-form videos and Reels from your ideas, images, screenshots and video clips.">
+</head>
+<body>
+  <main style="max-width:900px;margin:60px auto;padding:24px;font-family:Arial,sans-serif">
+    <h1>ReelForge AI</h1>
+    <h2>AI Reel & Short Video Creator</h2>
+    <p>Create short-form videos from ideas, images, screenshots and video clips.</p>
+    <p>ReelForge AI is designed for creators who want to turn content into ready-to-publish Reels quickly.</p>
+    <p><strong>Category:</strong> AI Video Generation / Content Creation</p>
+    <p><strong>Website:</strong>
+      <a href="https://reelforge-landing-steel.vercel.app">ReelForge AI</a>
+    </p>
+
+    <div style="text-align:center;margin:40px 0">
+      <a href="https://www.promptfrenzy.com/directory"
+         target="_blank"
+         rel="dofollow"
+         title="Featured on PromptFrenzy AI Directory">
+        <img src="https://www.promptfrenzy.com/badges/directory-mono-light.svg"
+             alt="Featured on PromptFrenzy AI Directory"
+             width="220"
+             height="44"
+             loading="lazy">
+      </a>
+    </div>
+  </main>
+</body>
+</html>
+"""
+
 @app.route("/health")
 def health():
     return "OK", 200

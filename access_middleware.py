@@ -99,6 +99,10 @@ def check_access():
     if request.path == "/health":
         return None
 
+    # Публичная страница для AI-каталогов и автоматической проверки.
+    if request.path == "/directory":
+        return None
+
     if request.path.startswith("/outputs/"):
         return None
 
