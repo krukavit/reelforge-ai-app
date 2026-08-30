@@ -1806,16 +1806,16 @@ RESULT_HTML = """
 
         .container {
             width: 100%;
-            max-width: 820px;
+            max-width: 980px;
             margin: 0 auto;
-            padding: 18px 14px 28px;
+            padding: 12px 10px 24px;
         }
 
         .logo {
             text-align: center;
-            font-size: 24px;
+            font-size: 23px;
             font-weight: 800;
-            margin-bottom: 18px;
+            margin-bottom: 12px;
         }
 
         .logo span {
@@ -1824,13 +1824,13 @@ RESULT_HTML = """
 
         .success {
             text-align: center;
-            margin-bottom: 14px;
+            margin-bottom: 8px;
         }
 
         .check {
-            width: 52px;
-            height: 52px;
-            margin: 0 auto 10px;
+            width: 46px;
+            height: 46px;
+            margin: 0 auto 7px;
             border-radius: 50%;
             background: #22c55e;
             display: flex;
@@ -1840,8 +1840,8 @@ RESULT_HTML = """
         }
 
         h1 {
-            margin: 0 0 5px;
-            font-size: 27px;
+            margin: 0 0 3px;
+            font-size: 25px;
         }
 
         .subtitle {
@@ -1851,19 +1851,21 @@ RESULT_HTML = """
         }
 
         .video-card {
+            width: 100%;
             background: #111118;
             border: 1px solid #272733;
-            border-radius: 16px;
-            padding: 6px;
-            margin-top: 14px;
+            border-radius: 14px;
+            padding: 4px;
+            margin-top: 8px;
             overflow: hidden;
         }
 
         video {
             display: block;
             width: 100%;
-            max-height: 82vh;
-            border-radius: 11px;
+            height: auto;
+            max-height: 90vh;
+            border-radius: 10px;
             background: #000;
             object-fit: contain;
         }
@@ -1871,18 +1873,18 @@ RESULT_HTML = """
         .actions {
             display: flex;
             flex-direction: column;
-            gap: 9px;
-            margin-top: 12px;
+            gap: 7px;
+            margin-top: 8px;
         }
 
         .button {
             display: block;
             width: 100%;
-            padding: 11px 16px;
-            border-radius: 10px;
+            padding: 9px 14px;
+            border-radius: 9px;
             text-align: center;
             text-decoration: none;
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 700;
         }
 
@@ -1961,25 +1963,25 @@ RESULT_HTML = """
 
         {% if topic %}
         <div class="script result-editor" style="
-            margin-top:20px;
-            padding:18px;
+            margin-top:14px;
+            padding:12px;
             background:#111118;
             border:1px solid #3a3a4a;
-            border-radius:16px;
+            border-radius:14px;
         ">
             <div style="
-                font-size:22px;
+                font-size:19px;
                 font-weight:800;
-                margin-bottom:8px;
+                margin-bottom:5px;
             ">
                 ✏️ Редактор новой версии
             </div>
 
             <p style="
                 color:#9ca3af;
-                font-size:15px;
-                line-height:1.5;
-                margin:0 0 20px;
+                font-size:13px;
+                line-height:1.35;
+                margin:0 0 11px;
             ">
                 Видео сверху — редактор снизу.
                 Измени требования и быстро создай новую версию.
@@ -1990,87 +1992,92 @@ RESULT_HTML = """
                 <div class="result-editor-options" style="
                     display:flex;
                     flex-wrap:wrap;
-                    gap:8px;
-                    margin-bottom:12px;
+                    gap:6px;
+                    margin-bottom:9px;
                 ">
-                <label style="
-                    display:inline-flex;
-                    align-items:center;
-                    gap:7px;
-                    padding:9px 11px;
-                    margin:0;
-                    background:#08080e;
-                    border:1px solid #30303b;
-                    border-radius:10px;
-                    cursor:pointer;
-                    flex:1 1 180px;
-                ">
-                    <input
-                        type="checkbox"
-                        name="editor_captions"
-                        value="1"
-                        style="width:22px;height:22px;"
-                        {% if 'титр' in topic.lower() or 'субтитр' in topic.lower() or 'captions' in topic.lower() or 'subtitles' in topic.lower() %}checked{% endif %}
-                    >
-                    <span style="font-size:16px;font-weight:700;">
-                        📝 Добавлять титры / текст на экране
-                    </span>
-                </label>
-
-                <label style="
-                    display:inline-flex;
-                    align-items:center;
-                    gap:7px;
-                    padding:9px 11px;
-                    margin:0;
-                    background:#08080e;
-                    border:1px solid #30303b;
-                    border-radius:10px;
-                    cursor:pointer;
-                    flex:1 1 180px;
-                ">
-                    <input
-                        type="checkbox"
-                        name="editor_voiceover"
-                        value="1"
-                        style="width:22px;height:22px;"
-                        {% if 'голос за кадром' in topic.lower() or 'озвуч' in topic.lower() or 'voice-over' in topic.lower() or 'voiceover' in topic.lower() or 'narration' in topic.lower() %}checked{% endif %}
-                    >
-                    <span style="font-size:16px;font-weight:700;">
-                        🎤 Добавлять голос за кадром
-                    </span>
-                </label>
-                </div>
-
-                <div style="
-                    margin-top:10px;
-                    margin-bottom:8px;
-                    font-size:15px;
-                    font-weight:700;
-                ">
-                    📍 Положение титров
-                </div>
-
-                <select
-                    name="editor_subtitle_position"
-                    style="
-                        width:100%;
-                        padding:10px 12px;
-                        border-radius:10px;
-                        border:1px solid #30303b;
+                    <label style="
+                        display:inline-flex;
+                        align-items:center;
+                        gap:6px;
+                        padding:7px 9px;
+                        margin:0;
                         background:#08080e;
-                        color:#fff;
-                        font-size:14px;
-                        margin-bottom:12px;
-                    "
-                >
-                    <option value="bottom">Снизу</option>
-                    <option value="top">Сверху</option>
-                </select>
+                        border:1px solid #30303b;
+                        border-radius:9px;
+                        cursor:pointer;
+                        flex:1 1 180px;
+                    ">
+                        <input
+                            type="checkbox"
+                            name="editor_captions"
+                            value="1"
+                            style="width:18px;height:18px;"
+                            {% if 'титр' in topic.lower() or 'субтитр' in topic.lower() or 'captions' in topic.lower() or 'subtitles' in topic.lower() %}checked{% endif %}
+                        >
+                        <span style="font-size:14px;font-weight:700;">
+                            📝 Титры / текст
+                        </span>
+                    </label>
+
+                    <label style="
+                        display:inline-flex;
+                        align-items:center;
+                        gap:6px;
+                        padding:7px 9px;
+                        margin:0;
+                        background:#08080e;
+                        border:1px solid #30303b;
+                        border-radius:9px;
+                        cursor:pointer;
+                        flex:1 1 180px;
+                    ">
+                        <input
+                            type="checkbox"
+                            name="editor_voiceover"
+                            value="1"
+                            style="width:18px;height:18px;"
+                            {% if 'голос за кадром' in topic.lower() or 'озвуч' in topic.lower() or 'voice-over' in topic.lower() or 'voiceover' in topic.lower() or 'narration' in topic.lower() %}checked{% endif %}
+                        >
+                        <span style="font-size:14px;font-weight:700;">
+                            🎤 Голос за кадром
+                        </span>
+                    </label>
+                </div>
 
                 <div style="
-                    margin-bottom:8px;
-                    font-size:15px;
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    margin:0 0 7px;
+                ">
+                    <div style="
+                        font-size:13px;
+                        font-weight:700;
+                        white-space:nowrap;
+                    ">
+                        📍 Положение титров
+                    </div>
+
+                    <select
+                        name="editor_subtitle_position"
+                        style="
+                            flex:1;
+                            padding:7px 9px;
+                            border-radius:8px;
+                            border:1px solid #30303b;
+                            background:#08080e;
+                            color:#fff;
+                            font-size:13px;
+                        "
+                    >
+                        <option value="bottom">Снизу</option>
+                        <option value="top">Сверху</option>
+                    </select>
+                </div>
+
+                <div style="
+                    margin-bottom:5px;
+                    font-size:13px;
                     font-weight:700;
                 ">
                     📝 Промт
@@ -2081,14 +2088,14 @@ RESULT_HTML = """
                     required
                     style="
                         width:100%;
-                        min-height:420px;
-                        padding:16px;
-                        border-radius:14px;
+                        min-height:300px;
+                        padding:12px;
+                        border-radius:11px;
                         border:1px solid #3a3a4a;
                         background:#08080e;
                         color:#fff;
-                        font-size:17px;
-                        line-height:1.6;
+                        font-size:15px;
+                        line-height:1.5;
                         resize:vertical;
                         outline:none;
                         display:block;
@@ -2102,9 +2109,10 @@ RESULT_HTML = """
                         width:100%;
                         border:0;
                         cursor:pointer;
-                        margin-top:12px;
-                        font-size:16px;
-                        padding:13px;
+                        margin-top:9px;
+                        font-size:15px;
+                        padding:10px 12px;
+                        border-radius:9px;
                     "
                 >
                     🔄 Создать новую версию
