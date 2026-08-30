@@ -2088,7 +2088,7 @@ RESULT_HTML = """
                     required
                     style="
                         width:100%;
-                        min-height:300px;
+                        min-height:500px;
                         padding:12px;
                         border-radius:11px;
                         border:1px solid #3a3a4a;
