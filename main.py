@@ -1806,16 +1806,16 @@ RESULT_HTML = """
 
         .container {
             width: 100%;
-            max-width: 760px;
+            max-width: 820px;
             margin: 0 auto;
-            padding: 28px 18px 40px;
+            padding: 18px 14px 28px;
         }
 
         .logo {
             text-align: center;
-            font-size: 25px;
+            font-size: 24px;
             font-weight: 800;
-            margin-bottom: 32px;
+            margin-bottom: 18px;
         }
 
         .logo span {
@@ -1824,64 +1824,65 @@ RESULT_HTML = """
 
         .success {
             text-align: center;
-            margin-bottom: 24px;
+            margin-bottom: 14px;
         }
 
         .check {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 16px;
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 10px;
             border-radius: 50%;
             background: #22c55e;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
+            font-size: 27px;
         }
 
         h1 {
-            margin: 0 0 8px;
-            font-size: 30px;
+            margin: 0 0 5px;
+            font-size: 27px;
         }
 
         .subtitle {
             margin: 0;
             color: #9ca3af;
-            font-size: 16px;
+            font-size: 15px;
         }
 
         .video-card {
             background: #111118;
             border: 1px solid #272733;
-            border-radius: 18px;
-            padding: 10px;
-            margin-top: 24px;
+            border-radius: 16px;
+            padding: 6px;
+            margin-top: 14px;
             overflow: hidden;
         }
 
         video {
             display: block;
             width: 100%;
-            max-height: 75vh;
-            border-radius: 12px;
+            max-height: 82vh;
+            border-radius: 11px;
             background: #000;
+            object-fit: contain;
         }
 
         .actions {
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            margin-top: 20px;
+            gap: 9px;
+            margin-top: 12px;
         }
 
         .button {
             display: block;
             width: 100%;
-            padding: 16px 20px;
-            border-radius: 12px;
+            padding: 11px 16px;
+            border-radius: 10px;
             text-align: center;
             text-decoration: none;
-            font-size: 17px;
+            font-size: 15px;
             font-weight: 700;
         }
 
@@ -1913,11 +1914,16 @@ RESULT_HTML = """
 
         @media (min-width: 600px) {
             .container {
-                padding-top: 45px;
+                padding-top: 28px;
+            }
+
+            .video-card {
+                padding: 8px;
             }
 
             .actions {
                 flex-direction: row;
+                gap: 10px;
             }
 
             .button {
