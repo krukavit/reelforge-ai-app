@@ -1780,6 +1780,20 @@ document.querySelectorAll("form").forEach(form => {
 });
 </script>
 
+
+<div style="text-align:center;margin:24px 0">
+  <a href="https://www.promptfrenzy.com/directory"
+     target="_blank"
+     rel="dofollow"
+     title="Featured on PromptFrenzy AI Directory">
+    <img src="https://www.promptfrenzy.com/badges/directory-mono-light.svg"
+         alt="Featured on PromptFrenzy AI Directory"
+         width="220"
+         height="44"
+         loading="lazy">
+  </a>
+</div>
+
 </body>
 </html>
 """
