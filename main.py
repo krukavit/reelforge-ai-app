@@ -4864,6 +4864,280 @@ def payment():
     </html>
     """
 
+
+@app.route("/admin")
+def admin_dashboard():
+    """Главная админ-панель ReelForge AI."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    html = """
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>ReelForge AI — Admin</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    background:#07070d;
+    color:#fff;
+    font-family:Arial,sans-serif;
+}
+
+.container{
+    max-width:850px;
+    margin:auto;
+    padding:28px 16px 60px;
+}
+
+h1{
+    margin:0 0 8px;
+    font-size:30px;
+}
+
+.subtitle{
+    color:#999;
+    margin-bottom:28px;
+}
+
+.admin-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+}
+
+.admin-card{
+    display:block;
+    text-decoration:none;
+    color:#fff;
+    background:#11111a;
+    border:1px solid #292936;
+    border-radius:18px;
+    padding:25px 22px;
+    min-height:150px;
+    transition:.15s;
+}
+
+.admin-card:hover{
+    border-color:#7c3aed;
+    background:#161321;
+    transform:translateY(-2px);
+}
+
+.admin-icon{
+    font-size:34px;
+    margin-bottom:14px;
+}
+
+.admin-title{
+    font-size:20px;
+    font-weight:800;
+    margin-bottom:7px;
+}
+
+.admin-desc{
+    color:#999;
+    font-size:14px;
+    line-height:1.45;
+}
+
+@media(max-width:650px){
+    .admin-grid{
+        grid-template-columns:1fr;
+    }
+
+    .admin-card{
+        min-height:125px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>⚙️ ReelForge AI</h1>
+
+<div class="subtitle">
+Центр управления проектом
+</div>
+
+<div class="admin-grid">
+
+<a class="admin-card"
+   href="/admin/users?key={{ admin_key }}">
+    <div class="admin-icon">👥</div>
+    <div class="admin-title">Пользователи</div>
+    <div class="admin-desc">
+        Пользователи, балансы, бесплатные генерации и доступ.
+    </div>
+</a>
+
+<a class="admin-card"
+   href="/admin/settings?key={{ admin_key }}">
+    <div class="admin-icon">🤖</div>
+    <div class="admin-title">AI и модели</div>
+    <div class="admin-desc">
+        OpenAI, Groq и выбор используемой AI-модели.
+    </div>
+</a>
+
+<a class="admin-card"
+   href="/admin/plans?key={{ admin_key }}">
+    <div class="admin-icon">💳</div>
+    <div class="admin-title">Тарифы</div>
+    <div class="admin-desc">
+        Free, Basic, Pro и Unlimited.
+    </div>
+</a>
+
+<a class="admin-card"
+   href="/admin/security?key={{ admin_key }}">
+    <div class="admin-icon">🔐</div>
+    <div class="admin-title">Безопасность</div>
+    <div class="admin-desc">
+        Ключи, доступ администратора и настройки безопасности.
+    </div>
+</a>
+
+</div>
+
+</div>
+
+</body>
+</html>
+"""
+
+    return render_template_string(
+        html,
+        admin_key=admin_key
+    )
+
+
+@app.route("/admin/plans")
+def admin_plans():
+    """Раздел тарифов админ-панели."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    return render_template_string("""
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReelForge AI — Тарифы</title>
+<style>
+body{
+    margin:0;
+    background:#07070d;
+    color:#fff;
+    font-family:Arial,sans-serif;
+}
+.container{
+    max-width:850px;
+    margin:auto;
+    padding:30px 16px 60px;
+}
+a{
+    color:#a78bfa;
+    text-decoration:none;
+}
+.card{
+    margin-top:20px;
+    padding:24px;
+    background:#11111a;
+    border:1px solid #292936;
+    border-radius:18px;
+}
+h1{margin:20px 0 8px}
+p{color:#999}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/admin?key={{ admin_key }}">← Админ-панель</a>
+<h1>💳 Тарифы</h1>
+<div class="card">
+<p>Раздел тарифов подготовлен.</p>
+<p>Здесь следующим этапом настроим Free / Basic / Pro / Unlimited.</p>
+</div>
+</div>
+</body>
+</html>
+""", admin_key=admin_key)
+
+
+@app.route("/admin/security")
+def admin_security():
+    """Раздел безопасности админ-панели."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "")
+
+    if not admin_key or provided_key != admin_key:
+        return "Доступ запрещён", 403
+
+    return render_template_string("""
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReelForge AI — Безопасность</title>
+<style>
+body{
+    margin:0;
+    background:#07070d;
+    color:#fff;
+    font-family:Arial,sans-serif;
+}
+.container{
+    max-width:850px;
+    margin:auto;
+    padding:30px 16px 60px;
+}
+a{
+    color:#a78bfa;
+    text-decoration:none;
+}
+.card{
+    margin-top:20px;
+    padding:24px;
+    background:#11111a;
+    border:1px solid #292936;
+    border-radius:18px;
+}
+h1{margin:20px 0 8px}
+p{color:#999;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="container">
+<a href="/admin?key={{ admin_key }}">← Админ-панель</a>
+<h1>🔐 Безопасность</h1>
+<div class="card">
+<p>Раздел безопасности подготовлен.</p>
+<p>Здесь следующим этапом проверим админ-доступ, API-ключи, токены и защиту служебных маршрутов.</p>
+</div>
+</div>
+</body>
+</html>
+""", admin_key=admin_key)
+
+
 @app.route("/admin/reset-free")
 def admin_reset_free():
     """
