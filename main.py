@@ -1872,20 +1872,22 @@ RESULT_HTML = """
 
         .actions {
             display: flex;
-            flex-direction: column;
-            gap: 7px;
-            margin-top: 8px;
+            flex-direction: row;
+            gap: 5px;
+            margin-top: 3px;
         }
 
         .button {
             display: block;
             width: 100%;
-            padding: 9px 14px;
-            border-radius: 9px;
+            padding: 6px 8px;
+            min-height: 34px;
+            border-radius: 8px;
             text-align: center;
             text-decoration: none;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
+            line-height: 1.2;
         }
 
         .download {
@@ -1925,7 +1927,7 @@ RESULT_HTML = """
 
             .actions {
                 flex-direction: row;
-                gap: 10px;
+                gap: 6px;
             }
 
             .button {
