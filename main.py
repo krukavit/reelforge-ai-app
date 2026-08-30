@@ -1963,7 +1963,7 @@ RESULT_HTML = """
 
         {% if topic %}
         <div class="script result-editor" style="
-            margin-top:14px;
+            margin-top:2px;
             padding:12px;
             background:#111118;
             border:1px solid #3a3a4a;
@@ -2088,7 +2088,7 @@ RESULT_HTML = """
                     required
                     style="
                         width:100%;
-                        min-height:500px;
+                        min-height:250px;
                         padding:12px;
                         border-radius:11px;
                         border:1px solid #3a3a4a;
