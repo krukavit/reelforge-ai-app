@@ -5040,19 +5040,29 @@ h1{
             const isGroq =
                 option.value === "openai/gpt-oss-120b";
 
-            option.hidden =
-                (provider === "openai" && !isOpenAI) ||
-                (provider === "groq" && !isGroq);
+            const allowed =
+                (provider === "openai" && isOpenAI) ||
+                (provider === "groq" && isGroq);
+
+            option.hidden = !allowed;
+            option.disabled = !allowed;
         });
 
-        const currentAllowed =
-            (provider === "openai" &&
-                (current === "gpt-5.4-mini" ||
-                 current === "gpt-5.6-luna")) ||
-            (provider === "groq" &&
-                current === "openai/gpt-oss-120b");
+        if (
+            provider === "openai" &&
+            (current === "gpt-5.4-mini" || current === "gpt-5.6-luna")
+        ) {
+            modelSelect.value = current;
+        } else if (provider === "groq") {
+            modelSelect.value = "openai/gpt-oss-120b";
+        } else {
+            modelSelect.value = "gpt-5.4-mini";
+        }
 
-        if (!currentAllowed) {
+        const selected =
+            modelSelect.options[modelSelect.selectedIndex];
+
+        if (!selected || selected.disabled) {
             modelSelect.value =
                 provider === "groq"
                     ? "openai/gpt-oss-120b"
@@ -5267,8 +5277,12 @@ def admin_settings():
             if ai_provider not in {"openai", "groq"}:
                 return "Некорректный AI provider", 400
 
-            if ai_model not in allowed_models[ai_provider]:
-                return "Некорректная модель", 400
+            # Сервер сам выбирает допустимую модель для выбранного провайдера.
+            # Это защищает от старого значения select в браузере.
+            if ai_provider == "groq":
+                ai_model = "openai/gpt-oss-120b"
+            elif ai_model not in allowed_models["openai"]:
+                ai_model = "gpt-5.4-mini"
 
             if plan not in {"free", "basic", "pro", "unlimited"}:
                 return "Некорректный тариф", 400
