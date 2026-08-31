@@ -8,9 +8,23 @@ import shutil
 import threading
 import time
 import psycopg
-from flask import Flask, request, render_template_string, send_from_directory, redirect, jsonify
+from flask import Flask, request, render_template_string, send_from_directory, redirect, jsonify, session
 
 from access_middleware import check_access, set_access_cookie
+
+def admin_session_ok():
+    """Проверяет текущую админскую сессию или одноразовый key из URL/form."""
+    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
+    provided_key = request.args.get("key", "") or request.form.get("key", "")
+    if not admin_key:
+        return False
+    if session.get("admin_authenticated") is True:
+        return True
+    if provided_key and provided_key == admin_key:
+        session["admin_authenticated"] = True
+        session.permanent = True
+        return True
+    return False
 
 
 # =========================
@@ -445,6 +459,11 @@ def consume_video(user_key, job_id):
     return True
 
 app = Flask(__name__)
+
+app.secret_key = os.getenv("SECRET_KEY") or os.getenv("ADMIN_RESET_TOKEN", "")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = True
 
 try:
     init_db()
@@ -5027,10 +5046,7 @@ def payment():
 @app.route("/admin")
 def admin_dashboard():
     """Главная админ-панель ReelForge AI."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
-
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     html = """
@@ -5134,7 +5150,7 @@ h1{
 <div class="admin-grid">
 
 <a class="admin-card"
-   href="/admin/users?key={{ admin_key }}">
+   href="/admin/users">
     <div class="admin-icon">👥</div>
     <div class="admin-title">Пользователи</div>
     <div class="admin-desc">
@@ -5143,7 +5159,7 @@ h1{
 </a>
 
 <a class="admin-card"
-   href="/admin/settings?key={{ admin_key }}">
+   href="/admin/settings">
     <div class="admin-icon">🤖</div>
     <div class="admin-title">AI и модели</div>
     <div class="admin-desc">
@@ -5152,7 +5168,7 @@ h1{
 </a>
 
 <a class="admin-card"
-   href="/admin/plans?key={{ admin_key }}">
+   href="/admin/plans">
     <div class="admin-icon">💳</div>
     <div class="admin-title">Тарифы</div>
     <div class="admin-desc">
@@ -5161,7 +5177,7 @@ h1{
 </a>
 
 <a class="admin-card"
-   href="/admin/security?key={{ admin_key }}">
+   href="/admin/security">
     <div class="admin-icon">🔐</div>
     <div class="admin-title">Безопасность</div>
     <div class="admin-desc">
@@ -5170,7 +5186,7 @@ h1{
 </a>
 
 <a class="admin-card"
-   href="/admin/marketing?key={{ admin_key }}">
+   href="/admin/marketing">
     <div class="admin-icon">📣</div>
     <div class="admin-title">Маркетинговые площадки</div>
     <div class="admin-desc">
@@ -5252,7 +5268,6 @@ h1{
 
     return render_template_string(
         html,
-        admin_key=admin_key
     )
 
 
@@ -5260,10 +5275,8 @@ h1{
 @app.route("/admin/marketing")
 def admin_marketing():
     """Управление маркетинговыми площадками."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     platforms = []
@@ -5364,12 +5377,12 @@ def admin_marketing():
 
           <div class="actions">
             <a class="button"
-               href="/admin/marketing/edit/{pid}?key={admin_key}">
+               href="/admin/marketing/edit/{pid}">
               ✏️ Редактировать
             </a>
 
             <a class="button secondary"
-               href="/admin/marketing/check/{pid}?key={admin_key}">
+               href="/admin/marketing/check/{pid}">
               🔎 Проверить
             </a>
 
@@ -5421,14 +5434,14 @@ a{{color:#a78bfa}}
       </div>
     </div>
 
-    <a class="back"
-      <a class="button" href="/admin/marketing/add?key={admin_key}">
+    <div>
+      <a class="button" href="/admin/marketing/add">
         ➕ Добавить площадку
       </a>
-href="/admin?key={admin_key}">
-      ← Админка
-    </a>
-  </div>
+      <a class="back" href="/admin" style="margin-left:10px">
+        ← Админка
+      </a>
+    </div>
 
   {cards or '<div class="platform">Площадки пока не добавлены.</div>'}
 
@@ -5445,10 +5458,8 @@ href="/admin?key={admin_key}">
 @app.route("/admin/marketing/check/<int:platform_id>")
 def admin_marketing_check(platform_id):
     """Проверка доступности сайта/API маркетинговой площадки."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     try:
@@ -5536,7 +5547,7 @@ a{color:#a78bfa;text-decoration:none}
 </head>
 <body>
 <div class="container">
-<a href="/admin/marketing?key={{ admin_key }}">← Маркетинговые площадки</a>
+<a href="/admin/marketing">← Маркетинговые площадки</a>
 <h1>🔎 Проверка площадки</h1>
 <div class="card">
 <h2>{{ name }}</h2>
@@ -5550,7 +5561,6 @@ a{color:#a78bfa;text-decoration:none}
 </body>
 </html>
 """,
-            admin_key=admin_key,
             name=name,
             target=target,
             status_text=status_text,
@@ -5565,10 +5575,8 @@ a{color:#a78bfa;text-decoration:none}
 @app.route("/admin/marketing/add", methods=["GET", "POST"])
 def admin_marketing_add():
     """Добавление новой маркетинговой площадки."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     if request.method == "POST":
@@ -5599,7 +5607,7 @@ def admin_marketing_add():
                 conn.commit()
 
             return redirect(
-                f"/admin/marketing?key={urllib.parse.quote(admin_key)}"
+                "/admin/marketing"
             )
 
         except Exception as e:
@@ -5628,7 +5636,7 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 </head>
 <body>
 <div class="container">
-<a href="/admin/marketing?key={{ admin_key }}">← Маркетинговые площадки</a>
+<a href="/admin/marketing">← Маркетинговые площадки</a>
 <h1>➕ Добавить площадку</h1>
 
 <div class="card">
@@ -5672,16 +5680,14 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 </div>
 </body>
 </html>
-""", admin_key=admin_key)
+""")
 
 
 @app.route("/admin/marketing/edit/<int:platform_id>", methods=["GET", "POST"])
 def admin_marketing_edit(platform_id):
     """Редактирование маркетинговой площадки."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     try:
@@ -5722,7 +5728,7 @@ def admin_marketing_edit(platform_id):
                     conn.commit()
 
                     return redirect(
-                        f"/admin/marketing?key={urllib.parse.quote(admin_key)}"
+                        "/admin/marketing"
                     )
 
                 cur.execute("""
@@ -5766,7 +5772,7 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 </head>
 <body>
 <div class="container">
-<a href="/admin/marketing?key={{ admin_key }}">← Маркетинговые площадки</a>
+<a href="/admin/marketing">← Маркетинговые площадки</a>
 <h1>✏️ {{ name }}</h1>
 
 <div class="card">
@@ -5822,7 +5828,6 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 </body>
 </html>
 """,
-            admin_key=admin_key,
             pid=pid,
             name=name,
             slug=slug,
@@ -5846,10 +5851,8 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 @app.route("/admin/marketing/delete/<int:platform_id>", methods=["POST"])
 def admin_marketing_delete(platform_id):
     """Удаление маркетинговой площадки."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     try:
@@ -5862,7 +5865,7 @@ def admin_marketing_delete(platform_id):
             conn.commit()
 
         return redirect(
-            f"/admin/marketing?key={urllib.parse.quote(admin_key)}"
+            "/admin/marketing"
         )
 
     except Exception as e:
@@ -5873,10 +5876,7 @@ def admin_marketing_delete(platform_id):
 @app.route("/admin/plans")
 def admin_plans():
     """Раздел тарифов админ-панели."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
-
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     return render_template_string("""
@@ -5915,7 +5915,7 @@ p{color:#999}
 </head>
 <body>
 <div class="container">
-<a href="/admin?key={{ admin_key }}">← Админ-панель</a>
+<a href="/admin">← Админ-панель</a>
 <h1>💳 Тарифы</h1>
 <div class="card">
 <p>Раздел тарифов подготовлен.</p>
@@ -5924,16 +5924,13 @@ p{color:#999}
 </div>
 </body>
 </html>
-""", admin_key=admin_key)
+""")
 
 
 @app.route("/admin/security")
 def admin_security():
     """Раздел безопасности админ-панели."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
-
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     return render_template_string("""
@@ -5972,7 +5969,7 @@ p{color:#999;line-height:1.5}
 </head>
 <body>
 <div class="container">
-<a href="/admin?key={{ admin_key }}">← Админ-панель</a>
+<a href="/admin">← Админ-панель</a>
 <h1>🔐 Безопасность</h1>
 <div class="card">
 <p>Раздел безопасности подготовлен.</p>
@@ -5981,7 +5978,7 @@ p{color:#999;line-height:1.5}
 </div>
 </body>
 </html>
-""", admin_key=admin_key)
+""")
 
 
 @app.route("/admin/reset-free")
@@ -5990,10 +5987,8 @@ def admin_reset_free():
     Сброс бесплатных входов текущего пользователя.
     Доступ только по ADMIN_RESET_TOKEN.
     """
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     user_key = request.cookies.get("rf_user_key")
@@ -6034,10 +6029,7 @@ def admin_reset_free():
 @app.route("/admin/settings", methods=["GET", "POST"])
 def admin_settings():
     """Настройки AI-провайдера, модели и тарифа ReelForge AI."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "") or request.form.get("key", "")
-
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     try:
@@ -6071,11 +6063,7 @@ def admin_settings():
 
             save_app_settings(ai_provider, ai_model, plan)
 
-            return redirect(
-                "/admin/settings?key="
-                + admin_key
-                + "&saved=1"
-            )
+            return redirect("/admin/settings?saved=1")
 
         settings = get_app_settings()
         saved = request.args.get("saved") == "1"
@@ -6265,7 +6253,7 @@ button{
 <div class="container">
 
 <a class="back"
-   href="/admin/users?key={{ admin_key }}">
+   href="/admin/users">
    ← Назад к пользователям
 </a>
 
@@ -6283,7 +6271,7 @@ button{
 
 <form method="post">
 
-<input type="hidden" name="key" value="{{ admin_key }}">
+
 
 <div class="card">
 
@@ -6415,7 +6403,6 @@ Groq — GPT-OSS 120B
         return render_template_string(
             html,
             settings=settings,
-            admin_key=admin_key,
             saved=saved
         )
 
@@ -6429,10 +6416,8 @@ def admin_users():
     """
     Полноценная админ-панель пользователей ReelForge AI.
     """
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     search = (request.args.get("search") or "").strip().lower()
@@ -6618,9 +6603,6 @@ th{
 
 <form class="search" method="get" action="/admin/users">
     <input
-        name="key"
-        type="hidden"
-        value="{{ admin_key }}"
     >
 
     <input
@@ -6677,31 +6659,31 @@ th{
 <div class="actions">
 
 <a class="btn plus"
-   href="/admin/add-free?key={{ admin_key }}&user_key={{ row[1] }}&amount=3">
+   href="/admin/add-free?user_key={{ row[1] }}&amount=3">
    +3
 </a>
 
 <a class="btn off"
-   href="/admin/add-free?key={{ admin_key }}&user_key={{ row[1] }}&amount=-3">
+   href="/admin/add-free?user_key={{ row[1] }}&amount=-3">
    −3
 </a>
 
 <a class="btn reset"
-   href="/admin/reset-user?key={{ admin_key }}&user_key={{ row[1] }}">
+   href="/admin/reset-user?user_key={{ row[1] }}">
    Сброс
 </a>
 
 {% if row[5] %}
 
 <a class="btn off"
-   href="/admin/unlimited?key={{ admin_key }}&user_key={{ row[1] }}&value=0">
+   href="/admin/unlimited?user_key={{ row[1] }}&value=0">
    ∞ Выкл
 </a>
 
 {% else %}
 
 <a class="btn on"
-   href="/admin/unlimited?key={{ admin_key }}&user_key={{ row[1] }}&value=1">
+   href="/admin/unlimited?user_key={{ row[1] }}&value=1">
    ∞ Вкл
 </a>
 
@@ -6727,7 +6709,6 @@ th{
         return render_template_string(
             html,
             rows=rows,
-            admin_key=admin_key,
             search=search
         )
 
@@ -6739,8 +6720,6 @@ th{
 @app.route("/admin/add-free")
 def admin_add_free():
     """Добавляет бесплатные генерации пользователю."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
     user_key = request.args.get("user_key", "").strip()
 
     try:
@@ -6748,7 +6727,7 @@ def admin_add_free():
     except ValueError:
         return "Некорректное количество", 400
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     if not user_key:
@@ -6757,7 +6736,7 @@ def admin_add_free():
     amount = max(-1000, min(amount, 1000))
 
     if amount == 0:
-        return redirect("/admin/users?key=" + admin_key)
+        return redirect("/admin/users")
 
     try:
         with db_connect() as conn:
@@ -6785,7 +6764,7 @@ def admin_add_free():
             flush=True
         )
 
-        return redirect("/admin/users?key=" + admin_key)
+        return redirect("/admin/users")
 
     except Exception as e:
         print(f"[ADMIN] ADD FREE ERROR: {e}", flush=True)
@@ -6795,12 +6774,10 @@ def admin_add_free():
 @app.route("/admin/unlimited")
 def admin_unlimited():
     """Включает или выключает безлимитный доступ."""
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
     user_key = request.args.get("user_key", "").strip()
     value = request.args.get("value", "0") == "1"
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     if not user_key:
@@ -6827,7 +6804,7 @@ def admin_unlimited():
             flush=True
         )
 
-        return redirect("/admin/users?key=" + admin_key)
+        return redirect("/admin/users")
 
     except Exception as e:
         print(f"[ADMIN] UNLIMITED ERROR: {e}", flush=True)
@@ -6839,11 +6816,9 @@ def admin_reset_user():
     """
     Сброс бесплатного счётчика конкретного пользователя.
     """
-    admin_key = os.getenv("ADMIN_RESET_TOKEN", "")
-    provided_key = request.args.get("key", "")
     user_key = request.args.get("user_key", "").strip()
 
-    if not admin_key or provided_key != admin_key:
+    if not admin_session_ok():
         return "Доступ запрещён", 403
 
     if not user_key:
@@ -6871,9 +6846,7 @@ def admin_reset_user():
             flush=True
         )
 
-        return redirect(
-            "/admin/users?key=" + admin_key
-        )
+        return redirect("/admin/users")
 
     except Exception as e:
         print(f"[ADMIN] RESET USER ERROR: {e}", flush=True)
