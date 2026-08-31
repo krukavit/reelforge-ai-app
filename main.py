@@ -1625,6 +1625,7 @@ async function uploadVideoForm(form) {
                         " MB</b>"
                 );
 
+                alert("DEBUG: FormData готова, перед FETCH");
                 console.log("[UPLOAD-DEBUG] BEFORE FETCH chunk", chunkIndex + 1, "/", totalChunks);
 
                 let response;
