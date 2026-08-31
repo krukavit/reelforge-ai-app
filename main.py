@@ -229,7 +229,7 @@ def get_app_settings():
 
 def save_app_settings(ai_provider, ai_model, plan):
     """Сохраняет глобальные настройки ReelForge AI."""
-    allowed_providers = {"openai", "groq"}
+    allowed_providers = set(PROVIDER_CONFIG.keys())
     allowed_plans = {"free", "basic", "pro", "unlimited"}
 
     if ai_provider not in allowed_providers:
@@ -493,6 +493,14 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 _groq_client = None
 _openai_client = None
+PROVIDER_CONFIG = {
+    "openai": {"name": "OpenAI", "key_env": "OPENAI_API_KEY", "base_url": None, "models": ["gpt-5.4-mini", "gpt-5.6-luna"]},
+    "groq": {"name": "Groq", "key_env": "GROQ_API_KEY", "base_url": "https://api.groq.com/openai/v1", "models": ["openai/gpt-oss-120b"]},
+    "gemini": {"name": "Google Gemini", "key_env": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "models": ["gemini-2.5-flash", "gemini-2.5-pro"]},
+    "cerebras": {"name": "Cerebras", "key_env": "CEREBRAS_API_KEY", "base_url": "https://api.cerebras.ai/v1", "models": ["gpt-oss-120b"]},
+    "mistral": {"name": "Mistral", "key_env": "MISTRAL_API_KEY", "base_url": "https://api.mistral.ai/v1", "models": ["mistral-small-latest", "mistral-large-latest"]},
+    "openrouter": {"name": "OpenRouter", "key_env": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1", "models": ["openrouter/free"]}
+}
 _font_path = None
 
 JOBS = {}
@@ -511,6 +519,25 @@ def set_job(job_id, **kwargs):
 def get_job(job_id):
     with JOBS_LOCK:
         return dict(JOBS.get(job_id, {}))
+
+def get_available_providers():
+    return {
+        key: {**cfg, "connected": bool(os.getenv(cfg["key_env"]))}
+        for key, cfg in PROVIDER_CONFIG.items()
+    }
+
+
+def get_provider_admin_info():
+    result = {}
+    for key, cfg in PROVIDER_CONFIG.items():
+        api_key = os.getenv(cfg["key_env"], "")
+        result[key] = {
+            **cfg,
+            "connected": bool(api_key),
+            "key_mask": ("••••••••" + api_key[-4:]) if len(api_key) >= 4 else ""
+        }
+    return result
+
 
 def get_groq_client():
     global _groq_client
@@ -538,23 +565,34 @@ def get_openai_client():
     return _openai_client
 
 
-def get_ai_client():
-    """
-    Возвращает клиента и модель согласно глобальным настройкам
-    ReelForge AI из PostgreSQL.
-    """
-    settings = get_app_settings()
+def create_provider_client(provider):
+    cfg = PROVIDER_CONFIG.get(provider)
+    if not cfg:
+        raise ValueError(f"Неизвестный AI provider: {provider}")
 
+    api_key = os.getenv(cfg["key_env"])
+    if not api_key:
+        raise ValueError(f"{cfg['key_env']} environment variable is not set")
+
+    from openai import OpenAI
+
+    kwargs = {"api_key": api_key}
+    if cfg["base_url"]:
+        kwargs["base_url"] = cfg["base_url"]
+
+    return OpenAI(**kwargs)
+
+
+def get_ai_client():
+    settings = get_app_settings()
     provider = settings.get("ai_provider", "groq")
     model = settings.get("ai_model", "openai/gpt-oss-120b")
-
-    if provider == "openai":
-        return get_openai_client(), model
-
-    if provider == "groq":
-        return get_groq_client(), model
-
-    raise ValueError(f"Неизвестный AI provider: {provider}")
+    if provider not in PROVIDER_CONFIG:
+        provider = "groq"
+    cfg = PROVIDER_CONFIG[provider]
+    if model not in cfg["models"]:
+        model = cfg["models"][0]
+    return create_provider_client(provider), model
 
 
 # ============================================================
@@ -6283,24 +6321,17 @@ def admin_settings():
             plan = (request.form.get("plan") or "free").strip().lower()
 
             allowed_models = {
-                "openai": {
-                    "gpt-5.4-mini",
-                    "gpt-5.6-luna",
-                },
-                "groq": {
-                    "openai/gpt-oss-120b",
-                },
+                key: set(cfg["models"])
+                for key, cfg in PROVIDER_CONFIG.items()
             }
 
-            if ai_provider not in {"openai", "groq"}:
+            if ai_provider not in PROVIDER_CONFIG:
                 return "Некорректный AI provider", 400
 
             # Сервер сам выбирает допустимую модель для выбранного провайдера.
             # Это защищает от старого значения select в браузере.
-            if ai_provider == "groq":
-                ai_model = "openai/gpt-oss-120b"
-            elif ai_model not in allowed_models["openai"]:
-                ai_model = "gpt-5.4-mini"
+            if ai_model not in allowed_models[ai_provider]:
+                ai_model = PROVIDER_CONFIG[ai_provider]["models"][0]
 
             if plan not in {"free", "basic", "pro", "unlimited"}:
                 return "Некорректный тариф", 400
@@ -6522,35 +6553,22 @@ button{
 <h2>🤖 AI-провайдер</h2>
 
 <div class="provider-switch">
-
+{% for key, provider in providers.items() %}
     <div class="provider-option">
-        <input
-            id="provider_openai"
-            type="radio"
-            name="ai_provider"
-            value="openai"
-            {% if settings.ai_provider == "openai" %}checked{% endif %}
-        >
-        <label for="provider_openai">
-            <span class="provider-name">OpenAI</span>
-            <span class="provider-desc">GPT</span>
+        <input id="provider_{{ key }}" type="radio" name="ai_provider" value="{{ key }}" {% if settings.ai_provider == key %}checked{% endif %}>
+        <label for="provider_{{ key }}">
+            <span>
+                <span class="provider-name">{{ provider.name }}</span>
+                <span class="provider-desc">
+                    {{ "🟢 Подключён" if provider.connected else "⚪ Не подключён" }}
+                    {% if provider_info[key].key_mask %}
+                        · {{ provider_info[key].key_mask }}
+                    {% endif %}
+                </span>
+            </span>
         </label>
     </div>
-
-    <div class="provider-option">
-        <input
-            id="provider_groq"
-            type="radio"
-            name="ai_provider"
-            value="groq"
-            {% if settings.ai_provider == "groq" %}checked{% endif %}
-        >
-        <label for="provider_groq">
-            <span class="provider-name">Groq</span>
-            <span class="provider-desc">Быстрый AI</span>
-        </label>
-    </div>
-
+{% endfor %}
 </div>
 
 </div>
@@ -6559,29 +6577,14 @@ button{
 
 <h2>🧠 Модель</h2>
 
-<select name="ai_model">
-
-<option
-    value="gpt-5.4-mini"
-    {% if settings.ai_model == "gpt-5.4-mini" %}selected{% endif %}
->
-OpenAI — GPT-5.4 Mini
-</option>
-
-<option
-    value="gpt-5.6-luna"
-    {% if settings.ai_model == "gpt-5.6-luna" %}selected{% endif %}
->
-OpenAI — GPT-5.6 Luna
-</option>
-
-<option
-    value="openai/gpt-oss-120b"
-    {% if settings.ai_model == "openai/gpt-oss-120b" %}selected{% endif %}
->
-Groq — GPT-OSS 120B
-</option>
-
+<select name="ai_model" id="ai_model">
+{% for key, provider in providers.items() %}
+    {% for model in provider.models %}
+    <option value="{{ model }}" data-provider="{{ key }}" {% if settings.ai_provider == key and settings.ai_model == model %}selected{% endif %}>
+        {{ provider.name }} — {{ model }}
+    </option>
+    {% endfor %}
+{% endfor %}
 </select>
 
 </div>
@@ -6638,6 +6641,38 @@ Groq — GPT-OSS 120B
 
 </form>
 
+<script>
+(function(){
+    const providers = document.querySelectorAll('input[name="ai_provider"]');
+    const modelSelect = document.getElementById("ai_model");
+
+    function updateModels(){
+        const selected = document.querySelector('input[name="ai_provider"]:checked');
+        if (!selected || !modelSelect) return;
+
+        const provider = selected.value;
+        let first = null;
+
+        Array.from(modelSelect.options).forEach(function(option){
+            const visible = option.dataset.provider === provider;
+            option.hidden = !visible;
+            if (visible && first === null) first = option;
+        });
+
+        const current = modelSelect.options[modelSelect.selectedIndex];
+        if (!current || current.dataset.provider !== provider){
+            if (first) modelSelect.value = first.value;
+        }
+    }
+
+    providers.forEach(function(input){
+        input.addEventListener("change", updateModels);
+    });
+
+    updateModels();
+})();
+</script>
+
 </div>
 
 </body>
@@ -6647,7 +6682,9 @@ Groq — GPT-OSS 120B
         return render_template_string(
             html,
             settings=settings,
-            saved=saved
+            saved=saved,
+            providers=get_available_providers(),
+            provider_info=get_provider_admin_info()
         )
 
     except Exception as e:
@@ -7208,6 +7245,39 @@ def directory_page():
 @app.route("/promptfrenzy")
 def promptfrenzy_badge():
     return """<!doctype html><html><head><meta charset="utf-8"><title>ReelForge AI — PromptFrenzy</title></head><body><main style="max-width:900px;margin:60px auto;padding:24px;font-family:Arial,sans-serif"><h1>ReelForge AI</h1><p>AI-powered tool for creating ready-to-publish Reels quickly.</p><p><a href="https://www.promptfrenzy.com/directory" target="_blank" rel="noopener" title="Featured on PromptFrenzy AI Directory"><img src="https://www.promptfrenzy.com/badges/directory.svg" alt="Featured on PromptFrenzy AI Directory" width="220" height="44"></a></p></main></body></html>"""
+
+@app.route("/admin/ai-provider-test")
+def admin_ai_provider_test():
+    if not admin_session_ok():
+        return jsonify({"ok": False, "error": "Доступ запрещён"}), 403
+
+    provider = (request.args.get("provider") or "").strip().lower()
+
+    if provider not in PROVIDER_CONFIG:
+        return jsonify({"ok": False, "error": "Некорректный AI provider"}), 400
+
+    try:
+        client = create_provider_client(provider)
+        model = PROVIDER_CONFIG[provider]["models"][0]
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "Reply with OK"}],
+            max_tokens=5
+        )
+        return jsonify({
+            "ok": True,
+            "provider": provider,
+            "model": model,
+            "response": response.choices[0].message.content
+        })
+    except Exception as e:
+        print(f"[ADMIN] PROVIDER TEST ERROR provider={provider}: {e}", flush=True)
+        return jsonify({
+            "ok": False,
+            "provider": provider,
+            "error": str(e)
+        }), 500
+
 
 @app.route("/health")
 def health():
