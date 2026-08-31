@@ -166,7 +166,7 @@ def init_db():
                     TRUE,
                     'verified',
                     'merged',
-                    'https://github.com/Prompt-Frenzy/ai-directory/pull/46'
+                    'https://promptfrenzy.com/directory/reelforge-ai'
                 )
                 ON CONFLICT (slug) DO UPDATE SET
                     api_url = EXCLUDED.api_url,
