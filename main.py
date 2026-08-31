@@ -5612,6 +5612,7 @@ def fetch_catalog_metadata(url):
 
     return {
         "name": name,
+        "slug": re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-"),
         "description": meta("description"),
         "logo_url": meta("og:image"),
     }
@@ -5741,7 +5742,7 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 <label>Website URL</label>
 <div style="display:flex;gap:10px;align-items:center">
 <input id="website_url" name="website_url" type="url" required placeholder="https://example.com">
-<button type="button" onclick="loadCatalogData()">🔎 Подтянуть данные</button>
+<button type="button" onclick="loadCatalogData(this)">🔎 Подтянуть данные</button>
 </div>
 
 <label>API URL</label>
@@ -5789,9 +5790,8 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 <button type="submit">Сохранить площадку</button>
 </form>
 <script>
-async function loadCatalogData() {
+async function loadCatalogData(button) {
     const input = document.getElementById("website_url");
-    const button = event.currentTarget;
     const url = input ? input.value.trim() : "";
 
     if (!url) {
@@ -5828,16 +5828,8 @@ async function loadCatalogData() {
             logo.value = data.logo_url;
         }
 
-        if (data.name) {
-            const name = document.querySelector(
-                'input[name="name"]'
-            );
-
-            if (name && !name.value.trim()) {
-                name.value = data.name;
-            }
-        }
-
+        if (data.name) document.querySelector('input[name="name"]').value = data.name;
+        if (data.slug) document.querySelector('input[name="slug"]').value = data.slug;
         alert("Данные каталога загружены");
     } catch (error) {
         alert("Ошибка: " + error.message);
