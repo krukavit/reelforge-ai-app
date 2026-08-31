@@ -5577,6 +5577,66 @@ a{color:#a78bfa;text-decoration:none}
         return f"Ошибка проверки: {e}", 500
 
 
+
+def fetch_catalog_metadata(url):
+    """Получает название, описание и OG image с сайта."""
+    import urllib.request
+    from html import unescape
+
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "ReelForge-AI-Catalog/1.0"}
+    )
+
+    with urllib.request.urlopen(req, timeout=10) as response:
+        html = response.read(300000).decode("utf-8", errors="ignore")
+
+    def meta(name):
+        pattern = (
+            r'<meta[^>]+(?:name|property)=["\']'
+            + re.escape(name)
+            + r'["\'][^>]+content=["\']([^"\']*)["\']'
+        )
+        match = re.search(pattern, html, re.I)
+        return unescape(match.group(1)).strip() if match else None
+
+    title = re.search(
+        r'<title[^>]*>(.*?)</title>',
+        html,
+        re.I | re.S
+    )
+
+    name = None
+    if title:
+        name = re.sub(r'\s+', ' ', title.group(1)).strip()
+
+    return {
+        "name": name,
+        "description": meta("description"),
+        "logo_url": meta("og:image"),
+    }
+
+
+
+@app.route("/admin/marketing/catalog-preview")
+def admin_marketing_catalog_preview():
+    """Возвращает метаданные сайта для автозаполнения формы."""
+    if not admin_session_ok():
+        return jsonify({"error": "Доступ запрещён"}), 403
+
+    url = request.args.get("url", "").strip()
+
+    if not url:
+        return jsonify({"error": "URL не указан"}), 400
+
+    try:
+        data = fetch_catalog_metadata(url)
+        return jsonify(data)
+    except Exception as e:
+        print(f"[ADMIN] CATALOG PREVIEW ERROR: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/admin/marketing/add", methods=["GET", "POST"])
 def admin_marketing_add():
     """Добавление новой маркетинговой площадки."""
@@ -5595,6 +5655,30 @@ def admin_marketing_add():
             automation_allowed = request.form.get("automation_allowed") == "1"
             badge_required = request.form.get("badge_required") == "1"
 
+            description = request.form.get("description", "").strip() or None
+            category = request.form.get("category", "").strip() or None
+            tags = request.form.get("tags", "").strip() or None
+            pricing = request.form.get("pricing", "").strip() or None
+            logo_url = request.form.get("logo_url", "").strip() or None
+            badge_url = request.form.get("badge_url", "").strip() or None
+
+            # Автозаполнение каталожных данных с сайта.
+            if website_url:
+                try:
+                    catalog = fetch_catalog_metadata(website_url)
+
+                    if not description:
+                        description = catalog.get("description")
+
+                    if not logo_url:
+                        logo_url = catalog.get("logo_url")
+
+                except Exception as catalog_error:
+                    print(
+                        f"[ADMIN] CATALOG AUTOFILL ERROR: {catalog_error}",
+                        flush=True
+                    )
+
             if not name or not slug or not website_url:
                 return "Ошибка: Name, Slug и Website URL обязательны.", 400
 
@@ -5603,11 +5687,13 @@ def admin_marketing_add():
                     cur.execute("""
                         INSERT INTO marketing_platforms
                         (name, slug, website_url, api_url, api_method,
-                         automation_allowed, auth_type, badge_required)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                         automation_allowed, auth_type, badge_required,
+                         description, category, tags, pricing, logo_url, badge_url)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, (
                         name, slug, website_url, api_url, api_method,
-                        automation_allowed, auth_type, badge_required
+                        automation_allowed, auth_type, badge_required,
+                        description, category, tags, pricing, logo_url, badge_url
                     ))
                 conn.commit()
 
@@ -5653,10 +5739,31 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 <input name="slug" required placeholder="product-hunt">
 
 <label>Website URL</label>
-<input name="website_url" type="url" required placeholder="https://example.com">
+<div style="display:flex;gap:10px;align-items:center">
+<input id="website_url" name="website_url" type="url" required placeholder="https://example.com">
+<button type="button" onclick="loadCatalogData()">🔎 Подтянуть данные</button>
+</div>
 
 <label>API URL</label>
 <input name="api_url" type="url" placeholder="https://example.com/api/...">
+
+<label>Описание для каталога</label>
+<textarea name="description" rows="4" placeholder="Короткое описание ReelForge AI для каталога"></textarea>
+
+<label>Категория</label>
+<input name="category" placeholder="video-generation">
+
+<label>Теги</label>
+<input name="tags" placeholder="video, reels, ai-video">
+
+<label>Pricing</label>
+<input name="pricing" placeholder="freemium">
+
+<label>Logo URL</label>
+<input name="logo_url" type="url" placeholder="https://example.com/logo.png">
+
+<label>Badge URL</label>
+<input name="badge_url" type="url" placeholder="https://example.com/badge.svg">
 
 <label>API Method</label>
 <select name="api_method">
@@ -5681,6 +5788,66 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 
 <button type="submit">Сохранить площадку</button>
 </form>
+<script>
+async function loadCatalogData() {
+    const input = document.getElementById("website_url");
+    const button = event.currentTarget;
+    const url = input ? input.value.trim() : "";
+
+    if (!url) {
+        alert("Сначала укажи Website URL");
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "⏳ Загружаем...";
+
+    try {
+        const response = await fetch(
+            "/admin/marketing/catalog-preview?url=" + encodeURIComponent(url)
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Не удалось получить данные");
+        }
+
+        const description = document.querySelector(
+            'textarea[name="description"]'
+        );
+        const logo = document.querySelector(
+            'input[name="logo_url"]'
+        );
+
+        if (description && data.description) {
+            description.value = data.description;
+        }
+
+        if (logo && data.logo_url) {
+            logo.value = data.logo_url;
+        }
+
+        if (data.name) {
+            const name = document.querySelector(
+                'input[name="name"]'
+            );
+
+            if (name && !name.value.trim()) {
+                name.value = data.name;
+            }
+        }
+
+        alert("Данные каталога загружены");
+    } catch (error) {
+        alert("Ошибка: " + error.message);
+    } finally {
+        button.disabled = false;
+        button.textContent = "🔎 Подтянуть данные";
+    }
+}
+</script>
+
 </div>
 </div>
 </body>
@@ -5713,6 +5880,12 @@ def admin_marketing_edit(platform_id):
                             review_status=%s,
                             publication_url=%s,
                             last_error=%s,
+                            description=%s,
+                            category=%s,
+                            tags=%s,
+                            pricing=%s,
+                            logo_url=%s,
+                            badge_url=%s,
                             updated_at=NOW()
                         WHERE id=%s
                     """, (
@@ -5728,6 +5901,12 @@ def admin_marketing_edit(platform_id):
                         request.form.get("review_status", "unknown").strip(),
                         request.form.get("publication_url", "").strip() or None,
                         request.form.get("last_error", "").strip() or None,
+                        request.form.get("description", "").strip() or None,
+                        request.form.get("category", "").strip() or None,
+                        request.form.get("tags", "").strip() or None,
+                        request.form.get("pricing", "").strip() or None,
+                        request.form.get("logo_url", "").strip() or None,
+                        request.form.get("badge_url", "").strip() or None,
                         platform_id
                     ))
                     conn.commit()
@@ -5740,7 +5919,8 @@ def admin_marketing_edit(platform_id):
                     SELECT id,name,slug,website_url,api_url,api_method,
                            automation_allowed,auth_type,badge_required,
                            submission_status,review_status,publication_url,
-                           last_error
+                           last_error,description,category,tags,pricing,
+                           logo_url,badge_url
                     FROM marketing_platforms
                     WHERE id=%s
                 """, (platform_id,))
@@ -5752,7 +5932,8 @@ def admin_marketing_edit(platform_id):
         (
             pid,name,slug,website_url,api_url,api_method,
             automation_allowed,auth_type,badge_required,
-            submission_status,review_status,publication_url,last_error
+            submission_status,review_status,publication_url,last_error,
+            description,category,tags,pricing,logo_url,badge_url
         ) = platform
 
         return render_template_string("""
@@ -5813,6 +5994,24 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
 <label>Publication URL</label>
 <input name="publication_url" value="{{ publication_url or '' }}">
 
+<label>Описание для каталога</label>
+<textarea name="description" rows="4">{{ description or '' }}</textarea>
+
+<label>Категория</label>
+<input name="category" value="{{ category or '' }}">
+
+<label>Теги</label>
+<input name="tags" value="{{ tags or '' }}">
+
+<label>Pricing</label>
+<input name="pricing" value="{{ pricing or '' }}">
+
+<label>Logo URL</label>
+<input name="logo_url" value="{{ logo_url or '' }}">
+
+<label>Badge URL</label>
+<input name="badge_url" value="{{ badge_url or '' }}">
+
 <label>Последняя ошибка</label>
 <input name="last_error" value="{{ last_error or '' }}">
 
@@ -5845,7 +6044,13 @@ button{margin-top:22px;padding:12px 18px;border:0;border-radius:10px;background:
             submission_status=submission_status,
             review_status=review_status,
             publication_url=publication_url,
-            last_error=last_error
+            last_error=last_error,
+            description=description,
+            category=category,
+            tags=tags,
+            pricing=pricing,
+            logo_url=logo_url,
+            badge_url=badge_url
         )
 
     except Exception as e:
