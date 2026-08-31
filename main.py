@@ -1587,7 +1587,6 @@ async function uploadVideoForm(form) {
                     file.size
                 );
 
-                alert("DEBUG: video " + (i + 1) + " size=" + file.size + " chunk=" + (chunkIndex + 1));
                 const blob = file.slice(start, end);
 
                 const fd = new FormData();
@@ -1625,8 +1624,6 @@ async function uploadVideoForm(form) {
                         " MB</b>"
                 );
 
-                alert("DEBUG: START chunk " + (chunkIndex + 1) + "/" + totalChunks);
-                alert("DEBUG: FormData готова, перед FETCH");
                 console.log("[UPLOAD-DEBUG] BEFORE FETCH chunk", chunkIndex + 1, "/", totalChunks);
 
                 let response;
