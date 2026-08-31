@@ -2292,7 +2292,7 @@ RESULT_HTML = """
 
         <div class="actions" style="margin-top:20px;">
             <form action="/prepare_reel" method="post" style="margin:0;">
-                <input type="hidden" name="script" value="{{ script|e }}">
+                <textarea name="script" style="display:none;">{{ script }}</textarea>
                 <button class="button download" type="submit" style="border:0;cursor:pointer;">
                     🎬 Создать Reels из этого сценария
                 </button>

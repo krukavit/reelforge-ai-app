@@ -100,7 +100,7 @@ def check_access():
         return None
 
     # Публичная страница для AI-каталогов и автоматической проверки.
-    if request.path == "/directory":
+    if request.path in ("/directory", "/promptfrenzy"):
         return None
 
     if request.path.startswith("/outputs/"):
