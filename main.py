@@ -1568,6 +1568,7 @@ async function uploadVideoForm(form) {
         console.log("[UPLOAD-DEBUG] entering video chunks");
 
         for (let i = 0; i < files.length; i++) {
+        console.log("[UPLOAD-DEBUG] VIDEO LOOP START", i + 1, "/", files.length);
             const file = files[i];
 
             const totalChunks = Math.ceil(
