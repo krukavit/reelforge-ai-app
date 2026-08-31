@@ -1380,8 +1380,7 @@ input[type=file]::file-selector-button{
         <textarea
             name="topic"
             placeholder="Например: Сделай динамичный Reels на 30 секунд про 5 самых красивых мест Японии"
-            required
-        ></textarea>
+            required>{{ generated_script|default("") }}</textarea>
 
         <button class="btn" type="submit">
             ✨ Подготовить промт
