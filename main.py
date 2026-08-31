@@ -5434,16 +5434,21 @@ a{{color:#a78bfa}}
       </div>
     </div>
 
-    <div>
-      <a class="button" href="/admin/marketing/add">
-        ➕ Добавить площадку
-      </a>
-      <a class="back" href="/admin" style="margin-left:10px">
-        ← Админка
-      </a>
     </div>
 
   {cards or '<div class="platform">Площадки пока не добавлены.</div>'}
+
+  <div style="margin-top:20px">
+      <a class="button" href="/admin/marketing/add">
+        ➕ Добавить площадку
+      </a>
+  </div>
+
+  <div style="margin-top:16px">
+    <a class="back" href="/admin">
+      ← Админка
+    </a>
+  </div>
 
 </div>
 </body>
