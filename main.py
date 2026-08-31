@@ -3621,6 +3621,39 @@ def mux_music(video_path, music_path, output_path):
         flush=True
     )
 
+def mux_original_audio(video_path, source_video_path, output_path):
+    if not os.path.exists(video_path):
+        raise RuntimeError(f"VIDEO NOT FOUND: {video_path}")
+    if not source_video_path or not os.path.exists(source_video_path):
+        raise RuntimeError(f"SOURCE VIDEO NOT FOUND: {source_video_path}")
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-stream_loop", "-1", "-i", source_video_path,
+        "-map", "0:v:0",
+        "-map", "1:a:0?",
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-shortest",
+        "-movflags", "+faststart",
+        output_path
+    ]
+
+    print(f"[ORIGINAL AUDIO] source={source_video_path}", flush=True)
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"[ORIGINAL AUDIO exit code {result.returncode}] "
+            + result.stderr[-1500:]
+        )
+
+    if not os.path.exists(output_path):
+        raise RuntimeError("ORIGINAL AUDIO OUTPUT NOT CREATED")
+
 def process_video_job(
     job_id,
     job_dir,
@@ -3883,10 +3916,18 @@ def process_video_job(
             )
 
         else:
-            shutil.copy(
-                silent_path,
-                final_path
-            )
+            source_audio = files_meta[0] if files_meta else None
+            if source_audio:
+                mux_original_audio(
+                    silent_path,
+                    source_audio,
+                    final_path
+                )
+            else:
+                shutil.copy(
+                    silent_path,
+                    final_path
+                )
 
         print(f"[JOB {job_id}] DONE final={final_path}", flush=True)
         set_job(
@@ -7162,6 +7203,10 @@ def directory_page():
 </body>
 </html>
 """
+
+@app.route("/promptfrenzy")
+def promptfrenzy_badge():
+    return """<!doctype html><html><head><meta charset="utf-8"><title>ReelForge AI — PromptFrenzy</title></head><body><main style="max-width:900px;margin:60px auto;padding:24px;font-family:Arial,sans-serif"><h1>ReelForge AI</h1><p>AI-powered tool for creating ready-to-publish Reels quickly.</p><p><a href="https://www.promptfrenzy.com/directory" target="_blank" rel="noopener" title="Featured on PromptFrenzy AI Directory"><img src="https://www.promptfrenzy.com/badges/directory.svg" alt="Featured on PromptFrenzy AI Directory" width="220" height="44"></a></p></main></body></html>"""
 
 @app.route("/health")
 def health():
