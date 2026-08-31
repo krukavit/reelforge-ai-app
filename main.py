@@ -7262,7 +7262,7 @@ def admin_ai_provider_test():
         response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": "Reply with OK"}],
-            max_tokens=5
+            max_completion_tokens=5
         )
         return jsonify({
             "ok": True,
