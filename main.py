@@ -1324,6 +1324,7 @@ textarea:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.12)}
     width:100%;padding:14px;border:1px dashed #39394a;
     border-radius:14px;background:#0b0b13;color:#9ca3af;
 }
+.website-input{width:100%;padding:15px;border-radius:14px;background:#0b0b13;color:#fff;border:1px solid #252533;font-size:15px;outline:none;transition:.2s;box-sizing:border-box;}
 input[type=file]::file-selector-button{
     background:linear-gradient(90deg,#7c3aed,#db2777);
     color:#fff;border:0;border-radius:9px;padding:9px 13px;
@@ -1449,17 +1450,16 @@ input[type=file]::file-selector-button{
             type="url"
             name="website_url"
             placeholder="https://example.com"
-            style="width:100%;padding:12px;border-radius:11px;border:1px solid #3a3a4a;background:#08080e;color:#fff;font-size:15px;outline:none;margin-bottom:14px;"
+            class="website-input"
         >
 
         <label>✨ Что создать? <span style="color:#666">(можно оставить пустым)</span></label>
         <textarea
             name="topic"
             placeholder="Например: Сделай динамичный Reels о продукте, выдели главные преимущества"
-            style="width:100%;min-height:180px;padding:12px;border-radius:11px;border:1px solid #3a3a4a;background:#08080e;color:#fff;font-size:15px;line-height:1.5;resize:vertical;outline:none;"
         >{{ generated_script|default("") }}</textarea>
 
-        <button class="btn" type="submit" style="width:100%;margin-top:12px;">
+        <button class="btn" type="submit">
             🎬 Создать Reels
         </button>
     </form>
