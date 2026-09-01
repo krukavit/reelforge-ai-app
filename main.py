@@ -468,6 +468,7 @@ app.config["SESSION_COOKIE_SECURE"] = True
 try:
     init_db()
     print("POSTGRES INIT OK")
+    print("[RUNTIME PATH]", os.environ.get("PATH"), flush=True)
 except Exception as e:
     print(f"DATABASE INIT WARNING: {e}")
 
@@ -600,6 +601,20 @@ def get_ai_client():
 # ============================================================
 # PEXELS — визуалы для PROMPT MODE
 # ============================================================
+
+def capture_website_screenshot(url, output_path):
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        import shutil
+        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+        browser = p.chromium.launch(headless=True, executable_path=chromium_path) if chromium_path else p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+        page.goto(url, wait_until="networkidle", timeout=30000)
+        page.screenshot(path=output_path, full_page=False)
+        browser.close()
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
+        raise RuntimeError("Скриншот сайта не создан")
+    return output_path
 
 def fetch_website_text(url):
     import requests
@@ -4552,11 +4567,17 @@ def create_reel_from_prompt():
                     flush=True
                 )
 
-            # 3. Ищем и скачиваем визуалы.
+            website_screenshot = None
+            if website_url:
+                website_screenshot = os.path.join(job_dir, "website_screenshot.png")
+                capture_website_screenshot(website_url, website_screenshot)
+                print(f"[WEBSITE SCREENSHOT] saved={website_screenshot}", flush=True)
             visual_files = prepare_prompt_images(
                 job_dir,
                 scene_plan
             )
+            if website_screenshot:
+                visual_files.insert(0, {"path": website_screenshot, "type": "image", "caption": "", "source": "Website", "url": website_url, "scene_index": -1})
 
             # 3. PROMPT AUTO MIX:
             # сохраняем ВСЕ сцены — видео и изображения —
