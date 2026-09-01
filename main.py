@@ -1020,7 +1020,7 @@ def prepare_prompt_images(job_dir, scene_plan):
     return downloaded
 
 
-def generate_prompt_scene_plan(topic):
+def generate_prompt_scene_plan(topic, website_text=""):
     """
     Создаёт редактируемый план Prompt Mode.
 
@@ -1074,7 +1074,7 @@ def generate_prompt_scene_plan(topic):
             },
             {
                 "role": "user",
-                "content": user_prompt
+                "content": (user_prompt + "\n\nДАННЫЕ САЙТА:\n" + website_text).strip()
             }
         ],
         max_completion_tokens=1400
@@ -4363,8 +4363,6 @@ PROMPT_PREVIEW_HTML = """
 def prepare_prompt():
     topic = request.form.get("topic", "").strip()
     website_url = request.form.get("website_url", "").strip()
-
-    website_url = request.form.get("website_url", "").strip()
     if not topic and not website_url:
         return "Введи идею для создания Reels!", 400
 
@@ -4438,6 +4436,7 @@ def prepare_prompt():
 def create_reel_from_prompt():
     topic = request.form.get("topic", "").strip()
     website_url = request.form.get("website_url", "").strip()
+    website_text = fetch_website_text(website_url) if website_url else ""
 
     # Настройки редактора Prompt Mode.
     # Чекбоксы явно определяют, нужны ли титры и voice-over.
@@ -4486,7 +4485,7 @@ def create_reel_from_prompt():
             )
 
             # 1. AI создаёт план сцен.
-            scene_plan = generate_prompt_scene_plan(topic)
+            scene_plan = generate_prompt_scene_plan(topic, website_text)
 
             # Настройки редактора имеют приоритет над тем,
             # что AI предположил в плане.
