@@ -12,3 +12,5 @@ yt-dlp
 psycopg[binary]>=3.2,<4
 gTTS
 beautifulsoup4
+
+playwright
