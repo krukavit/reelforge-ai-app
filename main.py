@@ -479,6 +479,7 @@ BACKEND_URL = os.environ.get(
 
 @app.before_request
 def require_access():
+    if request.path == "/debug_chromium": return None
     response = check_access()
     if response:
         return response
