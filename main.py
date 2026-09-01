@@ -500,7 +500,7 @@ PROVIDER_CONFIG = {
     "gemini": {"name": "Google Gemini", "key_env": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "models": ["gemini-2.5-flash", "gemini-2.5-pro"]},
     "cerebras": {"name": "Cerebras", "key_env": "CEREBRAS_API_KEY", "base_url": "https://api.cerebras.ai/v1", "models": ["gpt-oss-120b"]},
     "mistral": {"name": "Mistral", "key_env": "MISTRAL_API_KEY", "base_url": "https://api.mistral.ai/v1", "models": ["mistral-small-latest", "mistral-large-latest"]},
-    "openrouter": {"name": "OpenRouter", "key_env": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1", "models": ["openrouter/free"]}
+    "openrouter": {"name": "OpenRouter", "key_env": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1", "models": ["minimax/minimax-m3:free"]}
 }
 _font_path = None
 
@@ -1095,7 +1095,11 @@ def generate_prompt_scene_plan(topic, website_text=""):
         max_completion_tokens=1400
     )
 
-    raw = response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    if not content:
+        print(f"[PROMPT PLAN] EMPTY AI CONTENT: {response}", flush=True)
+        raise RuntimeError("AI не вернул текстовый ответ")
+    raw = content.strip()
 
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
