@@ -7406,6 +7406,14 @@ def admin_ai_provider_test():
 
 
 @app.route("/health")
+@app.route("/debug_chromium")
+def debug_chromium():
+    import shutil, os, glob
+    paths = [shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("google-chrome")]
+    paths += glob.glob("/root/.nix-profile/bin/*chrom*")
+    paths += glob.glob("/nix/var/nix/profiles/default/bin/*chrom*")
+    return {"path": os.environ.get("PATH"), "which": paths, "nix": glob.glob("/nix/store/*chromium*/bin/*")[:20]}
+
 def health():
     return "OK", 200
 
