@@ -7414,7 +7414,7 @@ def debug_chromium():
     paths = [shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("google-chrome")]
     paths += glob.glob("/root/.nix-profile/bin/*chrom*")
     paths += glob.glob("/nix/var/nix/profiles/default/bin/*chrom*")
-    with sync_playwright() as pw: browser = pw.chromium.launch(headless=True, executable_path=paths[0]); browser.close()
+    with sync_playwright() as pw: browser = pw.chromium.launch(headless=True, executable_path=paths[0]); page = browser.new_page(viewport={"width":1280,"height":720}); page.goto("https://reelforge-landing-steel.vercel.app", wait_until="networkidle", timeout=30000); page.screenshot(path="/tmp/reelforge-test.png", full_page=False); page.close(); browser.close()
     p = paths[0] if paths and paths[0] else "/nix/var/nix/profiles/default/bin/chromium"; r = subprocess.run([p, "--version"], capture_output=True, text=True, timeout=10); return {"path": os.environ.get("PATH"), "which": paths, "chromium": r.stdout.strip(), "stderr": r.stderr.strip(), "nix": glob.glob("/nix/store/*chromium*/bin/*")[:20]}
 
 def health():
