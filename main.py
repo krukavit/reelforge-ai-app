@@ -2823,7 +2823,7 @@ def parse_target_duration(topic):
         seconds = float(m.group(1).replace(",", ".")) * 60
         return max(5, min(int(round(seconds)), 600))
 
-    m = re.search(r"\b(\d{1,2}):(\d{2})\b", text)
+    m = re.search(chr(92)+chr(98)+r"([0-9]{1,2}):([0-9]{2})"+chr(92)+chr(98), text) if not re.search(r"формат\s*9:16|9:16", text) else None
     if m:
         return max(5, min(int(m.group(1)) * 60 + int(m.group(2)), 600))
 
