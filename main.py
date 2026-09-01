@@ -2266,7 +2266,7 @@ RESULT_HTML = """
         {% endif %}
 
         {% if topic %}
-        <div class="script result-editor" style="
+        <div id="result" class="script result-editor" style="
             margin-top:2px;
             padding:12px;
             background:#111118;
@@ -2282,7 +2282,7 @@ RESULT_HTML = """
             </div>
 
 
-            <form action="/create_reel_from_prompt" method="post">
+            <form style="margin:0;" action="/create_reel_from_prompt" method="post">
 
                 <div class="result-editor-options" style="
                     display:flex;
@@ -2403,10 +2403,11 @@ RESULT_HTML = """
                     class="button download"
                     type="submit"
                     style="
-                        width:100%;
+                        width:auto;
+                          display:inline-block;
                         border:0;
                         cursor:pointer;
-                        margin-top:9px;
+                        margin-top:0;
                         font-size:15px;
                         padding:10px 12px;
                         border-radius:9px;
@@ -2414,6 +2415,7 @@ RESULT_HTML = """
                 >
                     🔄 Создать новую версию
                 </button>
+                  <a href="#result" class="button" style="width:auto;display:inline-block;margin-left:8px;padding:10px 12px;">↩ Вернуться к результату</a>
 
             </form>
         </div>
