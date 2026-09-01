@@ -479,8 +479,6 @@ BACKEND_URL = os.environ.get(
 
 @app.before_request
 def require_access():
-    if request.path == "/debug_screenshot_function": return None
-    if request.path == "/debug_chromium": return None
     response = check_access()
     if response:
         return response
@@ -7408,22 +7406,6 @@ def admin_ai_provider_test():
 
 
 @app.route("/health")
-@app.route("/debug_chromium")
-def debug_chromium():
-    from playwright.sync_api import sync_playwright
-    import shutil, os, glob, subprocess
-    paths = [shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("google-chrome")]
-    paths += glob.glob("/root/.nix-profile/bin/*chrom*")
-    paths += glob.glob("/nix/var/nix/profiles/default/bin/*chrom*")
-    with sync_playwright() as pw: browser = pw.chromium.launch(headless=True, executable_path=paths[0]); page = browser.new_page(viewport={"width":1280,"height":720}); page.goto("https://reelforge-landing-steel.vercel.app", wait_until="networkidle", timeout=30000); page.screenshot(path="/tmp/reelforge-test.png", full_page=False); page.close(); browser.close()
-    p = paths[0] if paths and paths[0] else "/nix/var/nix/profiles/default/bin/chromium"; r = subprocess.run([p, "--version"], capture_output=True, text=True, timeout=10); return {"path": os.environ.get("PATH"), "which": paths, "chromium": r.stdout.strip(), "stderr": r.stderr.strip(), "nix": glob.glob("/nix/store/*chromium*/bin/*")[:20]}
-
-@app.route("/debug_screenshot_function")
-def debug_screenshot_function():
-    import os
-    path = os.path.join(OUTPUT_DIR, "debug_website.png")
-    capture_website_screenshot("https://reelforge-landing-steel.vercel.app", path)
-    return {"ok": True, "path": path, "size": os.path.getsize(path)}
 
 def health():
     return "OK", 200
