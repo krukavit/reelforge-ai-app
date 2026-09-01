@@ -4299,6 +4299,8 @@ PROMPT_PREVIEW_HTML = """
         </div>
 
         <form action="/create_reel_from_prompt" method="post">
+              {% if website_url %}<div style="margin-bottom:12px;color:#a855f7;font-size:14px;">🌐 Сайт: {{ website_url }}</div>{% endif %}
+              <input type="hidden" name="website_url" value="{{ website_url }}">
             <textarea name="topic" required>{{ prepared_prompt }}</textarea>
 
             <div class="editor-options">
