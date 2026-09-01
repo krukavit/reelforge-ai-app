@@ -7409,10 +7409,12 @@ def admin_ai_provider_test():
 @app.route("/health")
 @app.route("/debug_chromium")
 def debug_chromium():
+    from playwright.sync_api import sync_playwright
     import shutil, os, glob, subprocess
     paths = [shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("google-chrome")]
     paths += glob.glob("/root/.nix-profile/bin/*chrom*")
     paths += glob.glob("/nix/var/nix/profiles/default/bin/*chrom*")
+    with sync_playwright() as pw: browser = pw.chromium.launch(headless=True, executable_path=paths[0]); browser.close()
     p = paths[0] if paths and paths[0] else "/nix/var/nix/profiles/default/bin/chromium"; r = subprocess.run([p, "--version"], capture_output=True, text=True, timeout=10); return {"path": os.environ.get("PATH"), "which": paths, "chromium": r.stdout.strip(), "stderr": r.stderr.strip(), "nix": glob.glob("/nix/store/*chromium*/bin/*")[:20]}
 
 def health():
