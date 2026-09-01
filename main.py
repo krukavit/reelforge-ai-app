@@ -604,17 +604,69 @@ def get_ai_client():
 def fetch_website_text(url):
     import requests
     from bs4 import BeautifulSoup
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, urljoin
+
     parsed = urlparse(url.strip())
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("Некорректная ссылка на сайт")
-    response = requests.get(url.strip(), timeout=12, headers={"User-Agent": "ReelForgeAI/1.0"})
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
-    for tag in soup(["script", "style", "noscript", "svg"]):
-        tag.decompose()
-    text = " ".join(soup.stripped_strings)
-    return text[:12000]
+
+    queue = [url.strip()]
+    visited = set()
+    pages = []
+
+    while queue and len(visited) < 5:
+        current = queue.pop(0)
+        if current in visited:
+            continue
+
+        try:
+            response = requests.get(
+                current,
+                timeout=12,
+                headers={"User-Agent": "ReelForgeAI/1.0"}
+            )
+            response.raise_for_status()
+        except Exception:
+            continue
+
+        visited.add(current)
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        for tag in soup(["script", "style", "noscript", "svg"]):
+            tag.decompose()
+
+        text = " ".join(soup.stripped_strings)
+        if text:
+            pages.append(f"PAGE: {current}\n{text[:5000]}")
+
+        if len(visited) < 5:
+            priority_links = []
+            other_links = []
+
+            for link in soup.find_all("a", href=True):
+                absolute = urljoin(current, link["href"])
+                link_parsed = urlparse(absolute)
+                if link_parsed.netloc != parsed.netloc:
+                    continue
+                if absolute in visited or absolute in queue:
+                    continue
+
+                path = link_parsed.path.lower()
+                if any(
+                    key in path
+                    for key in (
+                        "about", "product", "feature", "pricing",
+                        "service", "solution", "blog", "contact"
+                    )
+                ):
+                    priority_links.append(absolute)
+                else:
+                    other_links.append(absolute)
+
+            queue.extend(priority_links)
+            queue.extend(other_links)
+
+    return "\n\n".join(pages)[:20000]
 
 
 def search_pexels_media(query, per_page=8):
@@ -1387,19 +1439,28 @@ input[type=file]::file-selector-button{
 <div class="card">
     <h2>🤖 Reels по промту</h2>
     <p class="card-desc">
-        Ничего не загружай — просто опиши, какое видео хочешь получить.
-        AI создаст сценарий, найдёт визуалы и соберёт вертикальный Reels.
+        Вставь ссылку на сайт или опиши идею.
+        AI изучит страницу, подготовит сценарий, найдёт визуалы и соберёт вертикальный Reels.
     </p>
 
     <form action="/prepare_prompt" method="post">
-        <label>✨ Что создать?</label>
+        <label>🔗 Ссылка на сайт <span style="color:#666">(необязательно)</span></label>
+        <input
+            type="url"
+            name="website_url"
+            placeholder="https://example.com"
+            style="width:100%;padding:12px;border-radius:11px;border:1px solid #3a3a4a;background:#08080e;color:#fff;font-size:15px;outline:none;margin-bottom:14px;"
+        >
+
+        <label>✨ Что создать? <span style="color:#666">(можно оставить пустым)</span></label>
         <textarea
             name="topic"
-            placeholder="Например: Сделай динамичный Reels на 30 секунд про 5 самых красивых мест Японии"
-            required>{{ generated_script|default("") }}</textarea>
+            placeholder="Например: Сделай динамичный Reels о продукте, выдели главные преимущества"
+            style="width:100%;min-height:180px;padding:12px;border-radius:11px;border:1px solid #3a3a4a;background:#08080e;color:#fff;font-size:15px;line-height:1.5;resize:vertical;outline:none;"
+        >{{ generated_script|default("") }}</textarea>
 
-        <button class="btn" type="submit">
-            ✨ Подготовить промт
+        <button class="btn" type="submit" style="width:100%;margin-top:12px;">
+            🎬 Создать Reels
         </button>
     </form>
 </div>
@@ -4296,6 +4357,7 @@ def prepare_prompt():
                     "content": """Ты — профессиональный режиссёр коротких вертикальных видео ReelForge AI.
 
 Пользователь дал сырую идею для Reels.
+Если предоставлены данные сайта, используй их как основной источник информации. Определи ключевые страницы и содержание сайта, выбери наиболее полезные факты о продукте или компании и на их основе создай сценарий Reels. Не выдумывай сведения, которых нет в данных сайта. Если данных недостаточно, используй только то, что удалось получить.
 
 Твоя задача — превратить её в один понятный, подробный и редактируемый промт для генерации видео.
 
