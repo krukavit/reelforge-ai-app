@@ -7409,11 +7409,11 @@ def admin_ai_provider_test():
 @app.route("/health")
 @app.route("/debug_chromium")
 def debug_chromium():
-    import shutil, os, glob
+    import shutil, os, glob, subprocess
     paths = [shutil.which("chromium"), shutil.which("chromium-browser"), shutil.which("google-chrome")]
     paths += glob.glob("/root/.nix-profile/bin/*chrom*")
     paths += glob.glob("/nix/var/nix/profiles/default/bin/*chrom*")
-    return {"path": os.environ.get("PATH"), "which": paths, "nix": glob.glob("/nix/store/*chromium*/bin/*")[:20]}
+    p = paths[0] if paths and paths[0] else "/nix/var/nix/profiles/default/bin/chromium"; r = subprocess.run([p, "--version"], capture_output=True, text=True, timeout=10); return {"path": os.environ.get("PATH"), "which": paths, "chromium": r.stdout.strip(), "stderr": r.stderr.strip(), "nix": glob.glob("/nix/store/*chromium*/bin/*")[:20]}
 
 def health():
     return "OK", 200
