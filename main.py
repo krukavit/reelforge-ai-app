@@ -1045,9 +1045,9 @@ def generate_prompt_scene_plan(topic, website_text=""):
     """
 
     client, ai_model = get_ai_client()
-    print(f"[PROMPT DURATION DEBUG] parsed={parse_target_duration(user_prompt)} topic={user_prompt[:500]!r}", flush=True)
 
     user_prompt = (topic or "").strip()
+    print(f"[PROMPT DURATION DEBUG] parsed={parse_target_duration(user_prompt)} topic={user_prompt[:500]!r}", flush=True)
     if not user_prompt:
         raise ValueError("Пустой промт")
 
