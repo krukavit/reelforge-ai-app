@@ -2363,6 +2363,8 @@ RESULT_HTML = """
                     📝 Промт
                 </div>
 
+                <input type="hidden" name="website_url" value="{{ website_url }}">
+
                 <textarea
                     name="topic"
                     required
@@ -2407,6 +2409,8 @@ RESULT_HTML = """
 
         <div class="actions" style="margin-top:20px;">
             <form action="/prepare_reel" method="post" style="margin:0;">
+                <input type="hidden" name="website_url" value="{{ website_url }}">
+
                 <textarea name="script" style="display:none;">{{ script }}</textarea>
                 <button class="button download" type="submit" style="border:0;cursor:pointer;">
                     🎬 Создать Reels из этого сценария
@@ -3770,6 +3774,18 @@ def mux_original_audio(video_path, source_video_path, output_path):
     if not os.path.exists(output_path):
         raise RuntimeError("ORIGINAL AUDIO OUTPUT NOT CREATED")
 
+def add_website_watermark(video_path, output_path, website_url):
+    if not website_url:
+        shutil.copy(video_path, output_path)
+        return
+    host = re.sub(r"^https?://", "", website_url).split("/")[0]
+    host = escape_drawtext(host)
+    font_path = get_font_path()
+    cmd = ["ffmpeg","-y","-i",video_path,"-vf",f"drawtext=fontfile='{font_path}':text='{host}':fontsize=28:fontcolor=white@0.9:box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=h-70","-c:a","copy","-movflags","+faststart",output_path]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError("Website watermark error: " + result.stderr[-1000:])
+
 def process_video_job(
     job_id,
     job_dir,
@@ -3781,7 +3797,7 @@ def process_video_job(
     target_duration_override=None,
     use_captions=None,
     use_voiceover=False,
-    voiceover_text=None,
+    voiceover_text=None, website_url=None,
 ):
     print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
     try:
@@ -4045,12 +4061,17 @@ def process_video_job(
                     final_path
                 )
 
+        if website_url:
+            watermarked_path = os.path.join(job_dir, "watermarked.mp4")
+            add_website_watermark(final_path, watermarked_path, website_url)
+            shutil.move(watermarked_path, final_path)
+            print(f"[WEBSITE WATERMARK] added={website_url}", flush=True)
         print(f"[JOB {job_id}] DONE final={final_path}", flush=True)
         set_job(
             job_id,
             status="done",
             script=script,
-            topic=topic,
+            topic=topic, website_url=website_url,
             video_url=f"{BACKEND_URL}/outputs/{job_id}.mp4"
         )
     except Exception as e:
@@ -4341,6 +4362,7 @@ PROMPT_PREVIEW_HTML = """
 @app.route("/prepare_prompt", methods=["POST"])
 def prepare_prompt():
     topic = request.form.get("topic", "").strip()
+    website_url = request.form.get("website_url", "").strip()
 
     website_url = request.form.get("website_url", "").strip()
     if not topic and not website_url:
@@ -4402,7 +4424,7 @@ def prepare_prompt():
         return render_template_string(
             PROMPT_PREVIEW_HTML,
             prepared_prompt=prepared_prompt,
-            original_topic=topic
+            original_topic=topic, website_url=website_url
         )
 
     except Exception as e:
@@ -4415,6 +4437,7 @@ def prepare_prompt():
 @app.route("/create_reel_from_prompt", methods=["POST"])
 def create_reel_from_prompt():
     topic = request.form.get("topic", "").strip()
+    website_url = request.form.get("website_url", "").strip()
 
     # Настройки редактора Prompt Mode.
     # Чекбоксы явно определяют, нужны ли титры и voice-over.
@@ -4449,7 +4472,7 @@ def create_reel_from_prompt():
         job_id,
         status="processing",
         mode="prompt",
-        topic=topic,
+        topic=topic, website_url=website_url,
         editor_use_captions=editor_use_captions,
         editor_use_voiceover=editor_use_voiceover,
         editor_subtitle_position=editor_subtitle_position,
@@ -4594,6 +4617,7 @@ def create_reel_from_prompt():
                 use_captions=prompt_use_captions,
                 use_voiceover=prompt_use_voiceover,
                 voiceover_text=prompt_voiceover_text,
+                website_url=website_url,
             )
 
 
@@ -4684,7 +4708,7 @@ def start_video_upload():
     set_job(
         job_id,
         status="uploading",
-        topic=topic,
+        topic=topic, website_url=website_url,
         total=total,
         video_paths=[]
     )
