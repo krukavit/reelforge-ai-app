@@ -2818,23 +2818,24 @@ def parse_target_duration(topic):
     """Определяет длительность ролика из промпта. Диапазон 5-600 секунд."""
     text = (topic or "").lower().strip()
 
-    # Минуты: 2 минуты, 5 мин, 10-минутный
-    m = re.search(r'(\d+(?:[.,]\d+)?)\s*[-–—]?\s*(?:минут(?:а|ы|у)?|мин\.?|m)\b', text)
+    # Сначала ищем явно указанную длительность в секундах.
+    # Поддерживаем обычный и неразрывный дефис: -, –, —, -
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*[-–—-]?\s*(?:секунд(?:а|ы|у)?|сек\.?|секундный|секундное|секундная|s)\b', text)
     if m:
-        seconds = float(m.group(1).replace(",", ".")) * 60
-        return max(5, min(int(round(seconds)), 600))
+        return max(5, min(int(round(float(m.group(1).replace(",", ".")))), 600))
+
+    # Минуты: 2 минуты, 5 мин, 10-минутный
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*[-–—-]?\s*(?:минут(?:а|ы|у)?|мин\.?|m)\b', text)
+    if m:
+        return max(5, min(int(round(float(m.group(1).replace(",", ".")) * 60)), 600))
 
     # Таймкод: 1:30, 5:00. Формат 9:16 игнорируем.
     m = re.search(r'\b(\d{1,2}):(\d{2})\b', text)
     if m and m.group(0) != "9:16":
         return max(5, min(int(m.group(1)) * 60 + int(m.group(2)), 600))
 
-    # Секунды: 10 секунд, 20-секундный, 45s
-    m = re.search(r'(\d+(?:[.,]\d+)?)\s*[-–—]?\s*(?:секунд(?:а|ы|у)?|сек\.?|секундный|секундное|секундная|s)\b', text)
-    if m:
-        return max(5, min(int(round(float(m.group(1).replace(",", ".")))), 600))
-
     return 40
+
 
 def parse_video_instructions(topic):
     """
