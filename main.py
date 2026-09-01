@@ -2415,7 +2415,7 @@ RESULT_HTML = """
                 >
                     🔄 Создать новую версию
                 </button>
-                  <a href="#result" class="button" style="width:auto;display:inline-block;margin-left:8px;padding:10px 12px;">↩ Вернуться к результату</a>
+                  <a href="javascript:history.back()" class="button" style="width:auto;display:inline-block;margin-left:6px;padding:10px 12px;background:#22222e;color:#fff;">↩ Вернуться к результату</a>
 
             </form>
         </div>
