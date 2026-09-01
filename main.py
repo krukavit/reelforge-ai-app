@@ -1145,7 +1145,9 @@ def generate_prompt_scene_plan(topic, website_text=""):
     except Exception:
         duration = parse_target_duration(topic)
 
-    duration = max(5, min(duration, 180))
+    if re.search(r"[0-9]", (topic or "")):
+        duration = parse_target_duration(topic)
+    duration = max(5, min(duration, 600))
 
     result = {
         "title": str(plan.get("title", "")).strip()[:200],
@@ -2815,21 +2817,20 @@ def parse_target_duration(topic):
     """Определяет длительность ролика из промпта. По умолчанию 40 секунд."""
     text = (topic or "").lower().strip()
 
-    # MM:SS
-    m = re.search(r'\b(\d{1,2}):(\d{2})\b', text)
-    if m:
-        return max(5, min(int(m.group(1)) * 60 + int(m.group(2)), 180))
-
     # минуты
     m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:минут(?:а|ы)?|мин\.?|m)\b', text)
     if m:
         seconds = float(m.group(1).replace(",", ".")) * 60
-        return max(5, min(int(round(seconds)), 180))
+        return max(5, min(int(round(seconds)), 600))
+
+    m = re.search(r"\b(\d{1,2}):(\d{2})\b", text)
+    if m:
+        return max(5, min(int(m.group(1)) * 60 + int(m.group(2)), 600))
 
     # секунды
     m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:секунд(?:а|ы)?|сек\.?|сек|s)\b', text)
     if m:
-        return max(5, min(int(round(float(m.group(1).replace(",", ".")))), 180))
+        return max(5, min(int(round(float(m.group(1).replace(",", ".")))), 600))
 
     return 40
 
