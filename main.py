@@ -1045,6 +1045,7 @@ def generate_prompt_scene_plan(topic, website_text=""):
     """
 
     client, ai_model = get_ai_client()
+    print(f"[PROMPT DURATION DEBUG] parsed={parse_target_duration(user_prompt)} topic={user_prompt[:500]!r}", flush=True)
 
     user_prompt = (topic or "").strip()
     if not user_prompt:
@@ -3806,6 +3807,7 @@ def add_website_watermark(video_path, output_path, website_url):
     cmd = ["ffmpeg","-y","-i",video_path,"-vf",f"drawtext=fontfile='{font_path}':text='{host}':fontsize=28:fontcolor=white@0.9:box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=h-70","-c:a","copy","-movflags","+faststart",output_path]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
+        print(f"[WEBSITE WATERMARK FFMPEG STDERR]\n{result.stderr}", flush=True)
         raise RuntimeError("Website watermark error: " + result.stderr[-1000:])
 
 def process_video_job(
