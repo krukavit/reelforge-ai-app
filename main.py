@@ -2815,26 +2815,26 @@ def build_slideshow_video(image_dir, output_path, captions=None, seconds_per_ima
         raise RuntimeError(f"[exit code {result.returncode}] " + result.stderr[-1000:])
 
 def parse_target_duration(topic):
-    """Определяет длительность ролика из промпта. По умолчанию 40 секунд."""
+    """Определяет длительность ролика из промпта. Диапазон 5-600 секунд."""
     text = (topic or "").lower().strip()
 
-    # минуты
-    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:минут(?:а|ы)?|мин\.?|m)\b', text)
+    # Минуты: 2 минуты, 5 мин, 10-минутный
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*[-–—]?\s*(?:минут(?:а|ы|у)?|мин\.?|m)\b', text)
     if m:
         seconds = float(m.group(1).replace(",", ".")) * 60
         return max(5, min(int(round(seconds)), 600))
 
-    m = re.search(chr(92)+chr(98)+r"([0-9]{1,2}):([0-9]{2})"+chr(92)+chr(98), text) if not re.search(r"формат\s*9:16|9:16", text) else None
-    if m:
+    # Таймкод: 1:30, 5:00. Формат 9:16 игнорируем.
+    m = re.search(r'\b(\d{1,2}):(\d{2})\b', text)
+    if m and m.group(0) != "9:16":
         return max(5, min(int(m.group(1)) * 60 + int(m.group(2)), 600))
 
-    # секунды
-    m = re.search(r'(\d+(?:[.,]\d+)?)\s*(?:секунд(?:а|ы)?|сек\.?|сек|s)\b', text)
+    # Секунды: 10 секунд, 20-секундный, 45s
+    m = re.search(r'(\d+(?:[.,]\d+)?)\s*[-–—]?\s*(?:секунд(?:а|ы|у)?|сек\.?|секундный|секундное|секундная|s)\b', text)
     if m:
         return max(5, min(int(round(float(m.group(1).replace(",", ".")))), 600))
 
     return 40
-
 
 def parse_video_instructions(topic):
     """
