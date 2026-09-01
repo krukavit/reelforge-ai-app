@@ -601,6 +601,22 @@ def get_ai_client():
 # PEXELS — визуалы для PROMPT MODE
 # ============================================================
 
+def fetch_website_text(url):
+    import requests
+    from bs4 import BeautifulSoup
+    from urllib.parse import urlparse
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError("Некорректная ссылка на сайт")
+    response = requests.get(url.strip(), timeout=12, headers={"User-Agent": "ReelForgeAI/1.0"})
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, "html.parser")
+    for tag in soup(["script", "style", "noscript", "svg"]):
+        tag.decompose()
+    text = " ".join(soup.stripped_strings)
+    return text[:12000]
+
+
 def search_pexels_media(query, per_page=8):
     """
     Ищет видео и фотографии Pexels по запросу.
@@ -4264,10 +4280,12 @@ PROMPT_PREVIEW_HTML = """
 def prepare_prompt():
     topic = request.form.get("topic", "").strip()
 
-    if not topic:
+    website_url = request.form.get("website_url", "").strip()
+    if not topic and not website_url:
         return "Введи идею для создания Reels!", 400
 
     try:
+        website_text = fetch_website_text(website_url) if website_url else ""
         client, ai_model = get_ai_client()
 
         response = client.chat.completions.create(
@@ -4300,7 +4318,7 @@ def prepare_prompt():
                 },
                 {
                     "role": "user",
-                    "content": topic
+                    "content": (topic + "\n\nДанные с сайта:\n" + website_text).strip()
                 }
             ],
             max_completion_tokens=1000
