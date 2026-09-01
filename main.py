@@ -4510,7 +4510,7 @@ def create_reel_from_prompt():
 
             # 1. AI создаёт план сцен.
             scene_plan = generate_prompt_scene_plan(topic, website_text)
-            print(f"[PROMPT PLAN DEBUG] duration={scene_plan.get("duration")} scenes={len(scene_plan.get("scenes", []))}", flush=True)
+            print(f"[PROMPT PLAN DEBUG] duration={scene_plan.get('duration')} scenes={len(scene_plan.get('scenes', []))}", flush=True)
 
             # Настройки редактора имеют приоритет над тем,
             # что AI предположил в плане.
