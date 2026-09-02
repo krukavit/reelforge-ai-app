@@ -6698,7 +6698,7 @@ button{
             <span>
                 <span class="provider-name">{{ provider.name }}</span>
                 <span class="provider-desc">
-                    {{ "🟢 Подключён" if provider.connected else "⚪ Не подключён" }}
+                    {{ "🟢 Активен" if settings.ai_provider == key else ("🔵 Подключён" if provider.connected else "⚪ Не подключён") }}
                     {% if provider_info[key].key_mask %}
                         · {{ provider_info[key].key_mask }}
                     {% endif %}
