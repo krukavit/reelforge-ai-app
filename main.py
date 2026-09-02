@@ -1094,7 +1094,7 @@ def generate_prompt_scene_plan(topic, website_text=""):
                 "content": (user_prompt + "\n\nДАННЫЕ САЙТА:\n" + website_text).strip()
             }
         ],
-        max_completion_tokens=1400
+        max_completion_tokens=3000
     )
 
     content = response.choices[0].message.content
