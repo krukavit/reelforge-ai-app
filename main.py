@@ -1036,7 +1036,7 @@ def prepare_prompt_images(job_dir, scene_plan):
     return downloaded
 
 
-def generate_prompt_scene_plan(topic, website_text=""):
+def generate_prompt_scene_plan(topic, website_text="", retry=False):
     """
     Создаёт редактируемый план Prompt Mode.
 
@@ -1094,7 +1094,7 @@ def generate_prompt_scene_plan(topic, website_text=""):
                 "content": (user_prompt + "\n\nДАННЫЕ САЙТА:\n" + website_text).strip()
             }
         ],
-        max_completion_tokens=3000
+        max_completion_tokens=(4500 if retry else 3000)
     )
 
     content = response.choices[0].message.content
@@ -1111,6 +1111,9 @@ def generate_prompt_scene_plan(topic, website_text=""):
         plan = json.loads(raw)
     except Exception as e:
         print(f"[PROMPT PLAN] JSON ERROR: {e}", flush=True)
+        if not retry:
+            print("[PROMPT PLAN] Retrying AI request after JSON error...", flush=True)
+            return generate_prompt_scene_plan(topic, website_text, retry=True)
         print(f"[PROMPT PLAN] RAW: {raw}", flush=True)
         raise RuntimeError("AI вернул некорректный план сцен")
 
