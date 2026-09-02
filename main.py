@@ -497,9 +497,10 @@ _openai_client = None
 PROVIDER_CONFIG = {
     "openai": {"name": "OpenAI", "key_env": "OPENAI_API_KEY", "base_url": None, "models": ["gpt-5.4-mini", "gpt-5.6-luna"]},
     "groq": {"name": "Groq", "key_env": "GROQ_API_KEY", "base_url": "https://api.groq.com/openai/v1", "models": ["openai/gpt-oss-120b"]},
-    "gemini": {"name": "Google Gemini", "key_env": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "models": ["gemini-2.5-flash", "gemini-2.5-pro"]},
+    "gemini": {"name": "Google Gemini", "key_env": "GEMINI_API_KEY", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/", "models": ["gemini-3.6-flash", "gemini-2.5-pro"]},
     "cerebras": {"name": "Cerebras", "key_env": "CEREBRAS_API_KEY", "base_url": "https://api.cerebras.ai/v1", "models": ["gpt-oss-120b"]},
     "mistral": {"name": "Mistral", "key_env": "MISTRAL_API_KEY", "base_url": "https://api.mistral.ai/v1", "models": ["mistral-small-latest", "mistral-large-latest"]},
+    "qwen_image_edit": {"name": "Qwen Image Edit 2511", "key_env": "DASHSCOPE_API_KEY", "base_url": "https://dashscope-intl.aliyuncs.com/api/v1", "models": ["qwen-image-edit"]},
     "openrouter": {"name": "OpenRouter", "key_env": "OPENROUTER_API_KEY", "base_url": "https://openrouter.ai/api/v1", "models": ["minimax/minimax-m3:free"]}
 }
 _font_path = None
