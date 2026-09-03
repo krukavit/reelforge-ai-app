@@ -1502,9 +1502,15 @@ input[type=file]::file-selector-button{
 
         <div id="main_voice_clone_upload" style="display:none;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;">
             <div style="font-weight:600;margin-bottom:6px;">🎙️ Образец моего голоса</div>
-            <small style="display:block;color:#9ca3af;margin-bottom:8px;">Прочитай этот текст естественным голосом и загрузи запись.</small>
+            <small style="display:block;color:#9ca3af;margin-bottom:8px;">Зажми кнопку и читай текст. Отпусти — запись сохранится автоматически.</small>
             <div style="padding:10px;background:#11111a;border-radius:8px;margin-bottom:10px;">Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!</div>
-            <input type="file" name="voice_sample" id="main_voice_sample" accept=".wav,.mp3,.m4a,.ogg,.flac,.webm,audio/*">
+            <button type="button" id="main_voice_record_btn" style="width:100%;padding:14px;border:1px solid #30303a;border-radius:10px;background:#1b1b25;color:#fff;font-size:16px;font-weight:600;user-select:none;-webkit-user-select:none;touch-action:none;">🎙️ Удерживай для записи</button>
+            <div id="main_voice_record_status" style="margin-top:8px;text-align:center;color:#9ca3af;font-size:13px;">Максимум 30 секунд</div>
+            <div style="height:8px;background:#22222c;border-radius:999px;overflow:hidden;margin-top:8px;">
+                <div id="main_voice_record_progress" style="width:0%;height:100%;background:#ff5c35;transition:width .1s;"></div>
+            </div>
+            <div id="main_voice_record_time" style="margin-top:6px;text-align:center;font-size:13px;">00:00 / 00:30</div>
+            <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm" style="display:none;">
             <input type="hidden" name="voice_sample_text" value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
         </div>
 
@@ -1519,7 +1525,83 @@ input[type=file]::file-selector-button{
         }
         mainVoiceMode.addEventListener("change", updateMainVoiceClone);
         updateMainVoiceClone();
-        </script>
+
+        const mainVoiceRecordBtn = document.getElementById("main_voice_record_btn");
+        const mainVoiceRecordStatus = document.getElementById("main_voice_record_status");
+        const mainVoiceRecordProgress = document.getElementById("main_voice_record_progress");
+        const mainVoiceRecordTime = document.getElementById("main_voice_record_time");
+        let mainVoiceRecorder = null;
+        let mainVoiceChunks = [];
+        let mainVoiceTimer = null;
+        let mainVoiceStartedAt = 0;
+        let mainVoiceStream = null;
+        let mainVoicePointerHeld = false;
+        const MAIN_VOICE_MAX_MS = 30000;
+        function mainVoiceFormatTime(ms) {
+            const sec = Math.min(30, Math.floor(ms / 1000));
+            return String(Math.floor(sec / 60)).padStart(2,"0") + ":" + String(sec % 60).padStart(2,"0");
+        }
+        function mainVoiceStop() {
+            if (mainVoiceRecorder && mainVoiceRecorder.state === "recording") mainVoiceRecorder.stop();
+        }
+        function mainVoiceStart() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+                mainVoiceRecordStatus.textContent = "Запись голоса не поддерживается этим браузером.";
+                return;
+            }
+            if (mainVoiceRecorder && mainVoiceRecorder.state === "recording") return;
+            if (mainVoiceStream) mainVoiceStream.getTracks().forEach(t => t.stop());
+            navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
+                if (!mainVoicePointerHeld) {
+                    stream.getTracks().forEach(t => t.stop());
+                    return;
+                }
+                mainVoiceStream = stream;
+                mainVoiceChunks = [];
+                mainVoiceStartedAt = Date.now();
+                mainVoiceRecorder = new MediaRecorder(stream, {mimeType:"audio/webm"});
+                mainVoiceRecorder.ondataavailable = e => { if (e.data && e.data.size) mainVoiceChunks.push(e.data); };
+                mainVoiceRecorder.onstop = () => {
+                    clearInterval(mainVoiceTimer);
+                    mainVoiceTimer = null;
+                    stream.getTracks().forEach(t => t.stop());
+                    mainVoiceStream = null;
+                    const elapsed = Math.min(MAIN_VOICE_MAX_MS, Date.now() - mainVoiceStartedAt);
+                    if (elapsed < 1000 || !mainVoiceChunks.length) {
+                        mainVoiceRecordStatus.textContent = "Запись слишком короткая. Удерживай кнопку не менее 1 секунды.";
+                        mainVoiceRecordProgress.style.width = "0%";
+                        mainVoiceRecordTime.textContent = "00:00 / 00:30";
+                        return;
+                    }
+                    const blob = new Blob(mainVoiceChunks, {type:"audio/webm"});
+                    const file = new File([blob], "voice_sample.webm", {type:"audio/webm"});
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    mainVoiceSample.files = dt.files;
+                    mainVoiceRecordStatus.textContent = "✓ Голос записан — " + mainVoiceFormatTime(elapsed);
+                    mainVoiceRecordBtn.textContent = "🎙️ Удерживай для новой записи";
+                };
+                mainVoiceRecorder.start();
+                mainVoiceRecordBtn.textContent = "🔴 Идёт запись… отпусти";
+                mainVoiceRecordStatus.textContent = "Говори естественно";
+                mainVoiceRecordProgress.style.width = "0%";
+                mainVoiceRecordTime.textContent = "00:00 / 00:30";
+                mainVoiceTimer = setInterval(() => {
+                    const elapsed = Date.now() - mainVoiceStartedAt;
+                    const limited = Math.min(elapsed, MAIN_VOICE_MAX_MS);
+                    mainVoiceRecordProgress.style.width = (limited / MAIN_VOICE_MAX_MS * 100) + "%";
+                    mainVoiceRecordTime.textContent = mainVoiceFormatTime(limited) + " / 00:30";
+                    if (elapsed >= MAIN_VOICE_MAX_MS) mainVoiceStop();
+                },100);
+            }).catch(() => {
+                mainVoiceRecordStatus.textContent = "Не удалось получить доступ к микрофону. Разреши доступ и попробуй снова.";
+            });
+        }
+        mainVoiceRecordBtn.addEventListener("pointerdown", e => { e.preventDefault(); mainVoicePointerHeld = true; mainVoiceStart(); });
+        mainVoiceRecordBtn.addEventListener("pointerup", e => { e.preventDefault(); mainVoicePointerHeld = false; mainVoiceStop(); });
+        mainVoiceRecordBtn.addEventListener("pointercancel", () => { mainVoicePointerHeld = false; mainVoiceStop(); });
+        mainVoiceRecordBtn.addEventListener("pointerleave", e => { if (e.buttons) { mainVoicePointerHeld = false; mainVoiceStop(); } });
+                </script>
 
         <button class="btn" type="submit">
             🎬 Создать Reels
