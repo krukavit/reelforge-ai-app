@@ -1478,7 +1478,7 @@ input[type=file]::file-selector-button{
         AI изучит страницу, подготовит сценарий, найдёт визуалы и соберёт вертикальный Reels.
     </p>
 
-    <form action="/prepare_prompt" method="post">
+    <form action="/prepare_prompt" method="post" enctype="multipart/form-data">
         <label>🔗 Ссылка на сайт <span style="color:#666">(необязательно)</span></label>
         <input
             type="url"
@@ -1492,6 +1492,34 @@ input[type=file]::file-selector-button{
             name="topic"
             placeholder="Например: Сделай динамичный Reels о продукте, выдели главные преимущества"
         >{{ generated_script|default("") }}</textarea>
+
+        <label style="margin-top:12px;">🎙️ Озвучка</label>
+        <select name="editor_voice_mode" id="main_editor_voice_mode" style="padding:8px 10px;border-radius:8px;background:#11111a;color:#fff;border:1px solid #30303a;width:100%;">
+            <option value="none">Без озвучки</option>
+            <option value="ai">AI-голос</option>
+            <option value="clone">Мой голос</option>
+        </select>
+
+        <div id="main_voice_clone_upload" style="display:none;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;">
+            <div style="font-weight:600;margin-bottom:6px;">🎙️ Образец моего голоса</div>
+            <small style="display:block;color:#9ca3af;margin-bottom:8px;">Прочитай этот текст естественным голосом и загрузи запись.</small>
+            <div style="padding:10px;background:#11111a;border-radius:8px;margin-bottom:10px;">Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!</div>
+            <input type="file" name="voice_sample" id="main_voice_sample" accept=".wav,.mp3,.m4a,.ogg,.flac,.webm,audio/*">
+            <input type="hidden" name="voice_sample_text" value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
+        </div>
+
+        <script>
+        const mainVoiceMode = document.getElementById("main_editor_voice_mode");
+        const mainVoiceClone = document.getElementById("main_voice_clone_upload");
+        const mainVoiceSample = document.getElementById("main_voice_sample");
+        function updateMainVoiceClone() {
+            const clone = mainVoiceMode.value === "clone";
+            mainVoiceClone.style.display = clone ? "block" : "none";
+            mainVoiceSample.required = clone;
+        }
+        mainVoiceMode.addEventListener("change", updateMainVoiceClone);
+        updateMainVoiceClone();
+        </script>
 
         <button class="btn" type="submit">
             🎬 Создать Reels
@@ -4412,31 +4440,13 @@ PROMPT_PREVIEW_HTML = """
                         <small>Выбери способ озвучки Reels</small>
                     </span>
                     <select name="editor_voice_mode" id="editor_voice_mode" style="padding:8px 10px;border-radius:8px;background:#11111a;color:#fff;border:1px solid #30303a;">
-                        <option value="none">Без озвучки</option>
-                        <option value="ai">AI-голос</option>
-                        <option value="clone">Мой голос</option>
+                        <option value="none" {% if editor_voice_mode == "none" %}selected{% endif %}>Без озвучки</option>
+                        <option value="ai" {% if editor_voice_mode == "ai" %}selected{% endif %}>AI-голос</option>
+                        <option value="clone" {% if editor_voice_mode == "clone" %}selected{% endif %}>Мой голос</option>
                     </select>
                 </label>
 
-                <div id="voice_clone_upload" style="display:none;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;">
-                    <div style="font-weight:600;margin-bottom:6px;">🎙️ Образец моего голоса</div>
-                    <small style="display:block;margin-bottom:8px;color:#9ca3af;">Загрузи короткий образец голоса для voice clone.</small>
-                    <input class="file" type="file" name="voice_sample" accept="audio/*">
-                    <input type="text" name="voice_sample_text" placeholder="Точный текст, произнесённый в образце голоса" style="width:100%;margin-top:8px;padding:9px 10px;border-radius:8px;background:#11111a;color:#fff;border:1px solid #30303a;">
-                </div>
-
-                <script>
-                const voiceMode = document.getElementById("editor_voice_mode");
-                const voiceUpload = document.getElementById("voice_clone_upload");
-                function updateVoiceUpload() {
-                    voiceUpload.style.display = voiceMode.value === "clone" ? "block" : "none";
-                }
-                voiceMode.addEventListener("change", updateVoiceUpload);
-                updateVoiceUpload();
-                </script>
-
-                <div class="subtitle-position">
-                    <div class="position-title">Положение титров</div>
+                <div id="voice_clone_upload" style="display:none;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;"><div style="font-weight:600;margin-bottom:6px;">🎙️ Мой голос</div><small style="display:block;color:#9ca3af;">Образец голоса уже загружен и будет использован для озвучки.</small><input type="hidden" name="voice_prep_token" value="{{ voice_prep_token|default("") }}"><input type="hidden" name="voice_sample_text" value="{{ voice_sample_text|default("") }}"></div>
 
                     <label>
                         <input type="radio" name="editor_subtitle_position" value="bottom" checked>
@@ -4478,11 +4488,29 @@ PROMPT_PREVIEW_HTML = """
 def prepare_prompt():
     topic = request.form.get("topic", "").strip()
     website_url = request.form.get("website_url", "").strip()
+    editor_voice_mode = request.form.get("editor_voice_mode", "none").strip().lower()
+    if editor_voice_mode not in ("none", "ai", "clone"):
+        editor_voice_mode = "none"
+    voice_sample = request.files.get("voice_sample")
+    voice_sample_text = (request.form.get("voice_sample_text") or "").strip()
+    voice_prep_token = ""
+    if editor_voice_mode == "clone" and (not voice_sample or not voice_sample.filename):
+        return "Для режима «Мой голос» загрузи образец голоса.", 400
     if not topic and not website_url:
         return "Введи идею для создания Reels!", 400
 
     try:
         website_text = fetch_website_text(website_url) if website_url else ""
+        if editor_voice_mode == "clone" and voice_sample:
+            ext = os.path.splitext(voice_sample.filename or "")[1].lower()
+            if ext not in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
+                return "Неподдерживаемый формат образца голоса.", 400
+            voice_prep_token = "prompt_prep_" + uuid.uuid4().hex
+            voice_prep_dir = os.path.join(UPLOAD_DIR, voice_prep_token)
+            os.makedirs(voice_prep_dir, exist_ok=True)
+            voice_prep_path = os.path.join(voice_prep_dir, "voice_sample" + ext)
+            voice_sample.save(voice_prep_path)
+            print(f"[VOICE CLONE PREP] sample saved={voice_prep_path} size={os.path.getsize(voice_prep_path)}", flush=True)
         client, ai_model = get_ai_client()
 
         response = client.chat.completions.create(
@@ -4537,7 +4565,10 @@ def prepare_prompt():
         return render_template_string(
             PROMPT_PREVIEW_HTML,
             prepared_prompt=prepared_prompt,
-            original_topic=topic, website_url=website_url
+            original_topic=topic, website_url=website_url,
+            editor_voice_mode=editor_voice_mode,
+            voice_sample_text=voice_sample_text,
+            voice_prep_token=voice_prep_token
         )
 
     except Exception as e:
@@ -4563,13 +4594,26 @@ def create_reel_from_prompt():
     # Настройки редактора Prompt Mode.
     # Чекбоксы явно определяют, нужны ли титры и voice-over.
     editor_use_captions = request.form.get("editor_captions") == "1"
-    editor_use_voiceover = request.form.get("editor_voiceover") == "1"
     editor_voice_mode = request.form.get("editor_voice_mode", "none").strip().lower()
-    voice_sample = request.files.get("voice_sample")
-    voice_sample_text = (request.form.get("voice_sample_text") or "").strip()
     if editor_voice_mode not in ("none", "ai", "clone"):
         editor_voice_mode = "none"
-    if editor_voice_mode == "clone" and (not voice_sample or not voice_sample.filename):
+    editor_use_voiceover = editor_voice_mode != "none"
+    voice_sample = request.files.get("voice_sample")
+    voice_prep_token = (request.form.get("voice_prep_token") or "").strip()
+    voice_sample_text = (request.form.get("voice_sample_text") or "").strip()
+    voice_sample_path_from_prep = None
+    if editor_voice_mode == "clone" and voice_prep_token:
+        if not voice_prep_token.startswith("prompt_prep_") or os.path.basename(voice_prep_token) != voice_prep_token:
+            return "Некорректный токен образца голоса.", 400
+        prep_dir = os.path.join(UPLOAD_DIR, voice_prep_token)
+        if not os.path.isdir(prep_dir):
+            return "Образец голоса не найден. Начни создание Reels заново.", 400
+        candidates = [f for f in os.listdir(prep_dir) if f.startswith("voice_sample.")]
+        if not candidates:
+            return "Образец голоса не найден. Начни создание Reels заново.", 400
+        voice_sample_path_from_prep = os.path.join(prep_dir, candidates[0])
+        voice_sample = None
+    elif editor_voice_mode == "clone" and (not voice_sample or not voice_sample.filename):
         return "Для режима «Мой голос» загрузи образец голоса.", 400
     editor_subtitle_position = request.form.get(
         "editor_subtitle_position",
@@ -4597,7 +4641,14 @@ def create_reel_from_prompt():
     os.makedirs(job_dir, exist_ok=True)
 
     voice_sample_path = None
-    if editor_voice_mode == "clone" and voice_sample:
+    if editor_voice_mode == "clone" and voice_prep_token:
+        ext = os.path.splitext(os.path.basename(voice_sample_path_from_prep))[1].lower()
+        if ext not in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
+            return "Неподдерживаемый формат образца голоса.", 400
+        voice_sample_path = os.path.join(job_dir, "voice_sample" + ext)
+        shutil.copy2(voice_sample_path_from_prep, voice_sample_path)
+        print(f"[VOICE CLONE] sample copied from prep={voice_sample_path} size={os.path.getsize(voice_sample_path)}", flush=True)
+    elif editor_voice_mode == "clone" and voice_sample:
         ext = os.path.splitext(voice_sample.filename or "")[1].lower()
         if ext not in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
             return "Неподдерживаемый формат образца голоса.", 400
