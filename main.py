@@ -53,6 +53,10 @@ def init_db():
             """)
 
             cur.execute("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked BOOLEAN NOT NULL DEFAULT FALSE
+            """)
+
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS payments (
                     id SERIAL PRIMARY KEY,
                     user_key TEXT NOT NULL,
@@ -6865,6 +6869,7 @@ def admin_users():
                             free_entries_used,
                             free_entries_limit,
                             unlimited_access,
+                            blocked,
                             created_at
                         FROM users
                         WHERE LOWER(user_key) LIKE %s
@@ -6879,6 +6884,7 @@ def admin_users():
                             free_entries_used,
                             free_entries_limit,
                             unlimited_access,
+                            blocked,
                             created_at
                         FROM users
                         ORDER BY id DESC
@@ -7078,7 +7084,9 @@ th{
 </td>
 
 <td>
-    {% if row[5] %}
+    {% if row[6] %}
+        <span class="off">🚫 Заблокирован</span>
+    {% elif row[5] %}
         <span class="unlimited">ACTIVE</span>
     {% else %}
         <span class="normal">Обычный</span>
@@ -7120,6 +7128,18 @@ th{
 
 {% endif %}
 
+{% if row[6] %}
+<a class="btn on"
+   href="/admin/toggle-block?user_key={{ row[1] }}&value=0">
+   🔓 Разблокировать
+</a>
+{% else %}
+<a class="btn off"
+   href="/admin/toggle-block?user_key={{ row[1] }}&value=1">
+   ✕ Заблокировать
+</a>
+{% endif %}
+
 </div>
 
 </td>
@@ -7146,6 +7166,31 @@ th{
     except Exception as e:
         print(f"[ADMIN] USERS ERROR: {e}", flush=True)
         return "Ошибка загрузки пользователей", 500
+
+
+@app.route("/admin/toggle-block")
+def admin_toggle_block():
+    """Блокирует или разблокирует пользователя по user_key."""
+    if not admin_session_ok():
+        return "Доступ запрещён", 403
+
+    user_key = (request.args.get("user_key") or "").strip()
+    value = request.args.get("value", "1") == "1"
+
+    if not user_key:
+        return "user_key не указан", 400
+
+    try:
+        with db_connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE users SET blocked = %s WHERE user_key = %s", (value, user_key))
+                if cur.rowcount == 0:
+                    return "Пользователь не найден", 404
+            conn.commit()
+        return redirect("/admin/users")
+    except Exception as e:
+        print(f"[ADMIN] BLOCK ERROR: {e}", flush=True)
+        return "Ошибка изменения блокировки", 500
 
 
 @app.route("/admin/add-free")

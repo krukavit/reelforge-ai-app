@@ -33,7 +33,8 @@ def get_user_access(user_key):
                     SELECT
                         free_entries_used,
                         free_entries_limit,
-                        unlimited_access
+                        unlimited_access,
+                        blocked
                     FROM users
                     WHERE user_key = %s
                 """, (user_key,))
@@ -47,6 +48,7 @@ def get_user_access(user_key):
             "used": row[0],
             "limit": row[1],
             "unlimited": bool(row[2]),
+            "blocked": bool(row[3]),
         }
 
     except Exception as e:
@@ -139,6 +141,9 @@ def check_access():
 
     if access is None:
         return "Ошибка проверки доступа", 500
+
+    if access["blocked"]:
+        return "Доступ заблокирован", 403
 
     # Безлимитный пользователь.
     if access["unlimited"]:
