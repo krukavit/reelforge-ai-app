@@ -1598,7 +1598,8 @@ input[type=file]::file-selector-button{
             });
         }
         mainVoiceRecordBtn.addEventListener("pointerdown", e => { e.preventDefault(); mainVoicePointerHeld = true; mainVoiceStart(); });
-        mainVoiceRecordBtn.addEventListener("pointerup", e => { e.preventDefault(); mainVoicePointerHeld = false; mainVoiceStop(); });
+        mainVoiceRecordBtn.addEventListener("pointerup", e => { e.preventDefault(); mainVoicePointerHeld = false; mainVoiceStop(); mainVoiceRecordBtn.blur(); });
+        mainVoiceRecordBtn.addEventListener("click", e => { e.preventDefault(); mainVoiceRecordBtn.blur(); });
         mainVoiceRecordBtn.addEventListener("pointercancel", () => { mainVoicePointerHeld = false; mainVoiceStop(); });
         mainVoiceRecordBtn.addEventListener("pointerleave", e => { if (e.buttons) { mainVoicePointerHeld = false; mainVoiceStop(); } });
                 </script>
