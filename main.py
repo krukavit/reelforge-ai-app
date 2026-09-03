@@ -1,4 +1,6 @@
 import os
+import hmac
+import secrets
 QWEN_TTS_URL = os.getenv("QWEN_TTS_URL", "https://wordercom-qwen3-tts.hf.space").rstrip("/")
 import re
 import json
@@ -8,8 +10,9 @@ import glob
 import shutil
 import threading
 import time
+import zipfile
 import psycopg
-from flask import Flask, request, render_template_string, send_from_directory, redirect, jsonify, session
+from flask import Flask, request, render_template_string, send_from_directory, redirect, jsonify, session, send_file
 
 from access_middleware import check_access, set_access_cookie
 
@@ -21,11 +24,25 @@ def admin_session_ok():
         return False
     if session.get("admin_authenticated") is True:
         return True
-    if provided_key and provided_key == admin_key:
+    if provided_key and hmac.compare_digest(provided_key, admin_key):
         session["admin_authenticated"] = True
         session.permanent = True
         return True
     return False
+
+
+def csrf_token():
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def csrf_ok():
+    expected = session.get("csrf_token", "")
+    provided = request.form.get("csrf_token", "")
+    return bool(expected and provided and hmac.compare_digest(provided, expected))
 
 
 # =========================
@@ -465,7 +482,7 @@ def consume_video(user_key, job_id):
 
 app = Flask(__name__)
 
-app.secret_key = os.getenv("SECRET_KEY") or os.getenv("ADMIN_RESET_TOKEN", "")
+app.secret_key = os.getenv("SECRET_KEY") or secrets.token_hex(32)
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = True
@@ -1466,6 +1483,23 @@ input[type=file]::file-selector-button{
     </div>
 </section>
 
+<div class="card" id="jobHistoryCard" style="display:none;">
+    <h2>🕘 Последние Reels</h2>
+    <div id="jobHistoryList"></div>
+</div>
+<script>
+(function(){
+  try{
+    const items=JSON.parse(localStorage.getItem('reelforge_job_history')||'[]');
+    if(!items.length)return;
+    const card=document.getElementById('jobHistoryCard');
+    const list=document.getElementById('jobHistoryList');
+    card.style.display='block';
+    list.innerHTML=items.map((x,i)=>'<a href="'+x.url.replace(/"/g,'&quot;')+'" style="display:block;padding:10px;margin:6px 0;border:1px solid #30303b;border-radius:9px;color:#fff;text-decoration:none;background:#08080e;">Reels #'+(i+1)+' — открыть результат</a>').join('');
+  }catch(e){}
+})();
+</script>
+
 <div class="card">
     <h2>🧠 Сгенерировать сценарий</h2>
     <p class="card-desc">Введи тему — AI подготовит готовый сценарий для короткого ролика.</p>
@@ -2345,6 +2379,10 @@ RESULT_HTML = """
                 ⬇ Скачать видео
             </a>
 
+            <a class="button download" href="/download-all/{{ video_url.rsplit('/', 1)[-1].replace('.mp4', '') }}" download>
+                ⬇ Download All (.zip)
+            </a>
+
             <a class="button new-video" href="/">
                 ＋ Создать ещё один
             </a>
@@ -2577,7 +2615,40 @@ RESULT_HTML = """
         </div>
         {% endif %}
 
+        <div class="script" style="margin-top:12px;">
+            <div style="font-weight:800;margin-bottom:8px;">✏️ Хук / текст</div>
+            <div contenteditable="true" spellcheck="true" style="min-height:70px;padding:10px;border:1px solid #30303b;border-radius:9px;background:#08080e;white-space:pre-wrap;outline:none;" id="editableResultText">{{ script or "" }}</div>
+            <button class="button download" type="button" style="margin-top:8px;border:0;cursor:pointer;" onclick="copyResultText()">📋 Скопировать</button>
+        </div>
+
+        <div style="margin-top:10px;color:#8b8f9b;font-size:12px;text-align:center;">Задание автоматически сохранено в истории браузера.</div>
+
     </main>
+<script>
+(function(){
+  const path=window.location.pathname;
+  const parts=path.split('/status/');
+  if(parts.length===2 && parts[1]){
+    const id=parts[1].split('/')[0];
+    try{
+      const key='reelforge_job_history';
+      let items=JSON.parse(localStorage.getItem(key)||'[]');
+      items=items.filter(x=>x.id!==id);
+      items.unshift({id:id,url:path+window.location.search,createdAt:Date.now()});
+      localStorage.setItem(key,JSON.stringify(items.slice(0,10)));
+    }catch(e){}
+  }
+})();
+function copyResultText(){
+  const el=document.getElementById('editableResultText');
+  if(!el) return;
+  const text=el.innerText||el.textContent||'';
+  navigator.clipboard.writeText(text).then(()=>{
+    const b=event && event.target;
+    if(b){const old=b.textContent;b.textContent='Скопировано ✓';setTimeout(()=>b.textContent=old,1500);}
+  }).catch(()=>{});
+}
+</script>
 </body>
 </html>
 """
@@ -4993,6 +5064,8 @@ def start_video_upload():
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
+    website_url = (request.form.get("website_url") or "").strip()
+
     set_job(
         job_id,
         status="uploading",
@@ -5441,7 +5514,7 @@ def create_reel_from_videos():
 def status(job_id):
     job = get_job(job_id)
     if not job:
-        return "Задача не найдена (возможно, сервер перезапустился)", 404
+        return render_template_string(ERROR_HTML, error="Задача не найдена. Возможно, сервер перезапустился или данные задачи были потеряны."), 404
 
     if job.get("status") == "processing":
         return render_template_string(PROCESSING_HTML.replace("__STATUS_URL__", f"{BACKEND_URL}/status/{job_id}?access=rf2026free"))
@@ -5454,11 +5527,34 @@ def status(job_id):
             topic=job.get("topic", ""),
             video_url=job.get("video_url")
         )
-    return "Неизвестный статус задачи", 500
+    return render_template_string(ERROR_HTML, error="Неизвестный статус задачи."), 500
 
 @app.route("/outputs/<path:filename>")
 def outputs(filename):
     return send_from_directory(OUTPUT_DIR, filename)
+
+@app.route("/download-all/<job_id>")
+def download_all(job_id):
+    """Собирает все готовые MP4 этого задания в ZIP."""
+    job = get_job(job_id)
+    if not job or job.get("status") != "done":
+        return jsonify({"error": "Готовые видео для этого задания не найдены"}), 404
+
+    candidates = []
+    final_path = os.path.join(OUTPUT_DIR, f"{job_id}.mp4")
+    if os.path.isfile(final_path):
+        candidates.append(final_path)
+
+    if not candidates:
+        return jsonify({"error": "Нет готовых видео для скачивания"}), 404
+
+    zip_path = os.path.join(OUTPUT_DIR, f"{job_id}.zip")
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in candidates:
+            zf.write(path, arcname=os.path.basename(path))
+
+    return send_file(zip_path, as_attachment=True, download_name=f"reelforge-{job_id}.zip", mimetype="application/zip")
+
 
 @app.route("/payment")
 def payment():
@@ -7335,47 +7431,60 @@ th{
 
 <div class="actions">
 
-<a class="btn plus"
-   href="/admin/add-free?user_key={{ row[1] }}&amount=3">
-   +3
-</a>
+<form method="post" action="/admin/add-free" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<input type="hidden" name="amount" value="3">
+<button class="btn plus" type="submit">+3</button>
+</form>
 
-<a class="btn off"
-   href="/admin/add-free?user_key={{ row[1] }}&amount=-3">
-   −3
-</a>
+<form method="post" action="/admin/add-free" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<input type="hidden" name="amount" value="-3">
+<button class="btn off" type="submit">−3</button>
+</form>
 
-<a class="btn reset"
-   href="/admin/reset-user?user_key={{ row[1] }}">
-   Сброс
-</a>
+<form method="post" action="/admin/reset-user" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<button class="btn reset" type="submit">Сброс</button>
+</form>
 
 {% if row[5] %}
 
-<a class="btn off"
-   href="/admin/unlimited?user_key={{ row[1] }}&value=0">
-   ∞ Выкл
-</a>
+<form method="post" action="/admin/unlimited" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<input type="hidden" name="value" value="0">
+<button class="btn off" type="submit">∞ Выкл</button>
+</form>
 
 {% else %}
 
-<a class="btn on"
-   href="/admin/unlimited?user_key={{ row[1] }}&value=1">
-   ∞ Вкл
-</a>
+<form method="post" action="/admin/unlimited" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<input type="hidden" name="value" value="1">
+<button class="btn on" type="submit">∞ Вкл</button>
+</form>
 
 {% endif %}
 
 {% if row[6] %}
-<a class="btn on"
-   href="/admin/toggle-block?user_key={{ row[1] }}&value=0">
-   🔓 Разблокировать
-</a>
+<form method="post" action="/admin/toggle-block" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<input type="hidden" name="value" value="0">
+<button class="btn on" type="submit">🔓 Разблокировать</button>
+</form>
 {% else %}
-<a class="btn off"
-   href="/admin/toggle-block?user_key={{ row[1] }}&value=1">
-   ✕ Заблокировать
-</a>
+<form method="post" action="/admin/toggle-block" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="user_key" value="{{ row[1] }}">
+<input type="hidden" name="value" value="1">
+<button class="btn off" type="submit">✕ Заблокировать</button>
+</form>
 {% endif %}
 
 </div>
@@ -7398,7 +7507,8 @@ th{
         return render_template_string(
             html,
             rows=rows,
-            search=search
+            search=search,
+            csrf_token=csrf_token()
         )
 
     except Exception as e:
@@ -7406,14 +7516,16 @@ th{
         return "Ошибка загрузки пользователей", 500
 
 
-@app.route("/admin/toggle-block")
+@app.route("/admin/toggle-block", methods=["POST"])
 def admin_toggle_block():
     """Блокирует или разблокирует пользователя по user_key."""
     if not admin_session_ok():
         return "Доступ запрещён", 403
+    if not csrf_ok():
+        return "CSRF token invalid", 403
 
-    user_key = (request.args.get("user_key") or "").strip()
-    value = request.args.get("value", "1") == "1"
+    user_key = (request.form.get("user_key") or "").strip()
+    value = request.form.get("value", "1") == "1"
 
     if not user_key:
         return "user_key не указан", 400
@@ -7431,18 +7543,20 @@ def admin_toggle_block():
         return "Ошибка изменения блокировки", 500
 
 
-@app.route("/admin/add-free")
+@app.route("/admin/add-free", methods=["POST"])
 def admin_add_free():
     """Добавляет бесплатные генерации пользователю."""
-    user_key = request.args.get("user_key", "").strip()
+    user_key = request.form.get("user_key", "").strip()
 
     try:
-        amount = int(request.args.get("amount", "3"))
+        amount = int(request.form.get("amount", "3"))
     except ValueError:
         return "Некорректное количество", 400
 
     if not admin_session_ok():
         return "Доступ запрещён", 403
+    if not csrf_ok():
+        return "CSRF token invalid", 403
 
     if not user_key:
         return "user_key не указан", 400
@@ -7485,14 +7599,16 @@ def admin_add_free():
         return "Ошибка добавления бесплатных генераций", 500
 
 
-@app.route("/admin/unlimited")
+@app.route("/admin/unlimited", methods=["POST"])
 def admin_unlimited():
     """Включает или выключает безлимитный доступ."""
-    user_key = request.args.get("user_key", "").strip()
-    value = request.args.get("value", "0") == "1"
+    user_key = request.form.get("user_key", "").strip()
+    value = request.form.get("value", "0") == "1"
 
     if not admin_session_ok():
         return "Доступ запрещён", 403
+    if not csrf_ok():
+        return "CSRF token invalid", 403
 
     if not user_key:
         return "user_key не указан", 400
@@ -7525,15 +7641,17 @@ def admin_unlimited():
         return "Ошибка изменения доступа", 500
 
 
-@app.route("/admin/reset-user")
+@app.route("/admin/reset-user", methods=["POST"])
 def admin_reset_user():
     """
     Сброс бесплатного счётчика конкретного пользователя.
     """
-    user_key = request.args.get("user_key", "").strip()
+    user_key = request.form.get("user_key", "").strip()
 
     if not admin_session_ok():
         return "Доступ запрещён", 403
+    if not csrf_ok():
+        return "CSRF token invalid", 403
 
     if not user_key:
         return "user_key не указан", 400
