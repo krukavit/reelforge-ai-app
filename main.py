@@ -1512,7 +1512,8 @@ input[type=file]::file-selector-button{
 
 
             <div id="main_voice_record_time" style="margin-top:6px;text-align:center;font-size:13px;">00:00 / 00:20</div>
-            <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm" style="display:none;">
+            <button type="button" id="main_voice_upload_btn" style="width:100%;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;background:#11111a;color:#fff;font-size:15px;font-weight:600;">📁 Загрузить из памяти телефона</button>
+            <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac" style="display:none;">
             <input type="hidden" name="voice_sample_text" value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
         </div>
 
@@ -1520,6 +1521,9 @@ input[type=file]::file-selector-button{
         const mainVoiceMode = document.getElementById("main_editor_voice_mode");
         const mainVoiceClone = document.getElementById("main_voice_clone_upload");
         const mainVoiceSample = document.getElementById("main_voice_sample");
+        const mainVoiceUploadBtn = document.getElementById("main_voice_upload_btn");
+        mainVoiceUploadBtn.addEventListener("click", e => { e.preventDefault(); mainVoiceSample.click(); });
+        mainVoiceSample.addEventListener("change", () => { if (mainVoiceSample.files && mainVoiceSample.files.length) { mainVoiceRecordStatus.textContent = "✓ Файл голоса выбран — " + mainVoiceSample.files[0].name; mainVoiceRecordBtn.textContent = "🎙️ Удерживай для новой записи"; } });
         function updateMainVoiceClone() {
             const clone = mainVoiceMode.value === "clone";
             mainVoiceClone.style.display = clone ? "block" : "none";
@@ -1592,7 +1596,7 @@ input[type=file]::file-selector-button{
                     const elapsed = Date.now() - mainVoiceStartedAt;
                     const limited = Math.min(elapsed, MAIN_VOICE_MAX_MS);
                     mainVoiceRecordProgress.style.width = (limited / MAIN_VOICE_MAX_MS * 100) + "%";
-                    mainVoiceRecordTime.textContent = mainVoiceFormatTime(limited) + " / 00:30";
+                    mainVoiceRecordTime.textContent = mainVoiceFormatTime(limited) + " / 00:20";
                     if (elapsed >= MAIN_VOICE_MAX_MS) mainVoiceStop();
                 },100);
             }).catch(() => {
@@ -1601,6 +1605,7 @@ input[type=file]::file-selector-button{
         }
         mainVoiceRecordBtn.addEventListener("pointerdown", e => { e.preventDefault(); mainVoicePointerHeld = true; mainVoiceStart(); });
         mainVoiceRecordBtn.addEventListener("pointerup", e => { e.preventDefault(); mainVoicePointerHeld = false; mainVoiceStop(); mainVoiceRecordBtn.blur(); });
+        window.addEventListener("pointerup", e => { if (mainVoicePointerHeld) { mainVoicePointerHeld = false; mainVoiceStop(); mainVoiceRecordBtn.blur(); } });
         mainVoiceRecordBtn.addEventListener("click", e => { e.preventDefault(); mainVoiceRecordBtn.blur(); });
         mainVoiceRecordBtn.addEventListener("pointercancel", () => { mainVoicePointerHeld = false; mainVoiceStop(); });
         mainVoiceRecordBtn.addEventListener("pointerleave", e => { if (e.buttons) { mainVoicePointerHeld = false; mainVoiceStop(); } });
@@ -2705,7 +2710,7 @@ PROCESSING_HTML = """
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="4">
+
     <title>ReelForge AI — Обработка</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; text-align: center; }
@@ -2716,7 +2721,7 @@ PROCESSING_HTML = """
 <body>
     <div class="spinner">⏳</div>
     <h2>Собираю видео...</h2>
-    <p>Это может занять минуту-две. Страница обновится автоматически.</p>
+    <p>Это может занять минуту-две. Не закрывай страницу.</p>\n    <div id="status" style="margin-top:20px;padding:14px;border:1px solid #30303a;border-radius:10px;background:#11111a;color:#aaa;">Видео создаётся...</div>\n    <script>\n    const statusUrl="__STATUS_URL__";\n    async function checkStatus(){try{const r=await fetch(statusUrl,{cache:"no-store"});const h=await r.text();if(!h.includes("Собираю видео...")){document.open();document.write(h);document.close();return;}document.getElementById("status").textContent="Видео создаётся... не закрывай страницу.";}catch(e){document.getElementById("status").textContent="Соединение восстанавливается...";}setTimeout(checkStatus,2000);}\n    setTimeout(checkStatus,1000);\n    </script>
 </body>
 </html>
 """
@@ -4925,12 +4930,7 @@ def create_reel_from_prompt():
     )
     t.start()
 
-    return render_template_string(
-        PROCESSING_HTML.replace(
-            "</body>",
-            f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'
-        )
-    )
+    return render_template_string(PROCESSING_HTML.replace("__STATUS_URL__", f"{BACKEND_URL}/status/{job_id}?access=rf2026free"))
 
 
 @app.route("/create_video", methods=["POST"])
@@ -4970,7 +4970,7 @@ def create_video():
     t.daemon = True
     t.start()
 
-    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
+    return render_template_string(PROCESSING_HTML.replace("__STATUS_URL__", f"{BACKEND_URL}/status/{job_id}?access=rf2026free"))
 
 
 @app.route("/start_video_upload", methods=["POST"])
@@ -5430,7 +5430,7 @@ def create_reel_from_videos():
     t.daemon = True
     t.start()
 
-    return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
+    return render_template_string(PROCESSING_HTML.replace("__STATUS_URL__", f"{BACKEND_URL}/status/{job_id}?access=rf2026free"))
 
 @app.route("/status/<job_id>")
 def status(job_id):
@@ -5439,7 +5439,7 @@ def status(job_id):
         return "Задача не найдена (возможно, сервер перезапустился)", 404
 
     if job.get("status") == "processing":
-        return render_template_string(PROCESSING_HTML.replace("</body>", f'<meta http-equiv="refresh" content="4;url={BACKEND_URL}/status/{job_id}?access=rf2026free"></body>'))
+        return render_template_string(PROCESSING_HTML.replace("__STATUS_URL__", f"{BACKEND_URL}/status/{job_id}?access=rf2026free"))
     elif job.get("status") == "error":
         return render_template_string(ERROR_HTML, error=job.get("error", "неизвестная ошибка"))
     elif job.get("status") == "done":
