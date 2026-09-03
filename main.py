@@ -1505,11 +1505,11 @@ input[type=file]::file-selector-button{
             <small style="display:block;color:#9ca3af;margin-bottom:8px;">Зажми кнопку и читай текст. Отпусти — запись сохранится автоматически.</small>
             <div style="padding:10px;background:#11111a;border-radius:8px;margin-bottom:10px;">Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!</div>
             <button type="button" id="main_voice_record_btn" style="width:100%;padding:14px;border:1px solid #30303a;border-radius:10px;background:#1b1b25;color:#fff;font-size:16px;font-weight:600;user-select:none;-webkit-user-select:none;touch-action:none;">🎙️ Удерживай для записи</button>
-            <div id="main_voice_record_status" style="margin-top:8px;text-align:center;color:#9ca3af;font-size:13px;">Максимум 30 секунд</div>
+            <div id="main_voice_record_status" style="margin-top:8px;text-align:center;color:#9ca3af;font-size:13px;">Максимум 15 секунд</div>
             <div style="height:8px;background:#22222c;border-radius:999px;overflow:hidden;margin-top:8px;">
                 <div id="main_voice_record_progress" style="width:0%;height:100%;background:#ff5c35;transition:width .1s;"></div>
             </div>
-            <div id="main_voice_record_time" style="margin-top:6px;text-align:center;font-size:13px;">00:00 / 00:30</div>
+            <div id="main_voice_record_time" style="margin-top:6px;text-align:center;font-size:13px;">00:00 / 00:15</div>
             <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm" style="display:none;">
             <input type="hidden" name="voice_sample_text" value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
         </div>
@@ -1536,7 +1536,7 @@ input[type=file]::file-selector-button{
         let mainVoiceStartedAt = 0;
         let mainVoiceStream = null;
         let mainVoicePointerHeld = false;
-        const MAIN_VOICE_MAX_MS = 30000;
+        const MAIN_VOICE_MAX_MS = 15000;
         function mainVoiceFormatTime(ms) {
             const sec = Math.min(30, Math.floor(ms / 1000));
             return String(Math.floor(sec / 60)).padStart(2,"0") + ":" + String(sec % 60).padStart(2,"0");
@@ -1570,7 +1570,7 @@ input[type=file]::file-selector-button{
                     if (elapsed < 1000 || !mainVoiceChunks.length) {
                         mainVoiceRecordStatus.textContent = "Запись слишком короткая. Удерживай кнопку не менее 1 секунды.";
                         mainVoiceRecordProgress.style.width = "0%";
-                        mainVoiceRecordTime.textContent = "00:00 / 00:30";
+                        mainVoiceRecordTime.textContent = "00:00 / 00:15";
                         return;
                     }
                     const blob = new Blob(mainVoiceChunks, {type:"audio/webm"});
@@ -1585,7 +1585,7 @@ input[type=file]::file-selector-button{
                 mainVoiceRecordBtn.textContent = "🔴 Идёт запись… отпусти";
                 mainVoiceRecordStatus.textContent = "Говори естественно";
                 mainVoiceRecordProgress.style.width = "0%";
-                mainVoiceRecordTime.textContent = "00:00 / 00:30";
+                mainVoiceRecordTime.textContent = "00:00 / 00:15";
                 mainVoiceTimer = setInterval(() => {
                     const elapsed = Date.now() - mainVoiceStartedAt;
                     const limited = Math.min(elapsed, MAIN_VOICE_MAX_MS);
