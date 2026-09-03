@@ -1,4 +1,5 @@
 import os
+QWEN_TTS_URL = os.getenv("QWEN_TTS_URL", "https://wordercom-qwen3-tts.hf.space").rstrip("/")
 import re
 import json
 import subprocess
@@ -3677,6 +3678,73 @@ def select_prompt_music(topic=""):
 
 
 
+def generate_qwen_voice_clone_audio(reference_audio_path, reference_text, target_text, output_path, language="Russian", model_size="1.7B"):
+    import requests
+    import json as _json
+    if not reference_audio_path or not os.path.exists(reference_audio_path):
+        raise RuntimeError("VOICE CLONE REFERENCE AUDIO NOT FOUND")
+    if not (reference_text or "").strip():
+        raise RuntimeError("VOICE CLONE REFERENCE TEXT IS EMPTY")
+    if not (target_text or "").strip():
+        raise RuntimeError("VOICE CLONE TARGET TEXT IS EMPTY")
+    print(f"[VOICE CLONE] UPLOADING sample={reference_audio_path}", flush=True)
+    with open(reference_audio_path, "rb") as f:
+        upload = requests.post(QWEN_TTS_URL + "/gradio_api/upload", files={"files": f}, timeout=120)
+    upload.raise_for_status()
+    uploaded = upload.json()
+    file_data = uploaded[0] if isinstance(uploaded, list) else uploaded
+    if isinstance(file_data, str):
+        file_data = {"path": file_data, "url": QWEN_TTS_URL + "/gradio_api/file=" + file_data, "size": os.path.getsize(reference_audio_path), "orig_name": os.path.basename(reference_audio_path), "mime_type": "audio/wav", "meta": {"_type": "gradio.FileData"}}
+    print("[VOICE CLONE] SAMPLE UPLOADED", flush=True)
+    payload = {"data": [file_data, reference_text.strip(), target_text.strip(), language, False, model_size]}
+    call = requests.post(QWEN_TTS_URL + "/gradio_api/call/generate_voice_clone", json=payload, timeout=120)
+    call.raise_for_status()
+    event_id = (call.json() or {}).get("event_id")
+    if not event_id:
+        raise RuntimeError("VOICE CLONE EVENT ID NOT RETURNED")
+    print(f"[VOICE CLONE] JOB STARTED event={event_id}", flush=True)
+    event_url = QWEN_TTS_URL + "/gradio_api/call/generate_voice_clone/" + event_id
+    audio_data = None
+    with requests.get(event_url, stream=True, timeout=900) as response:
+        response.raise_for_status()
+        for raw_line in response.iter_lines(decode_unicode=True):
+            if not raw_line or not raw_line.startswith("data:"):
+                continue
+            data_text = raw_line[5:].strip()
+            if not data_text or data_text == "[DONE]":
+                continue
+            try:
+                data = _json.loads(data_text)
+            except Exception:
+                continue
+            if isinstance(data, list) and data:
+                result = data[0]
+                if isinstance(result, dict):
+                    audio_data = result.get("audio") or result
+            elif isinstance(data, dict):
+                audio_data = data.get("audio") or data
+            if isinstance(audio_data, dict) and (audio_data.get("path") or audio_data.get("url")):
+                break
+    if not isinstance(audio_data, dict):
+        raise RuntimeError("VOICE CLONE AUDIO NOT RETURNED")
+    audio_url = audio_data.get("url")
+    if not audio_url:
+        audio_path = audio_data.get("path")
+        if not audio_path:
+            raise RuntimeError("VOICE CLONE AUDIO URL NOT RETURNED")
+        audio_url = QWEN_TTS_URL + "/gradio_api/file=" + audio_path
+    print("[VOICE CLONE] DOWNLOADING AUDIO", flush=True)
+    with requests.get(audio_url, stream=True, timeout=300) as response:
+        response.raise_for_status()
+        with open(output_path, "wb") as out:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    out.write(chunk)
+    if not os.path.exists(output_path) or os.path.getsize(output_path) < 1000:
+        raise RuntimeError("VOICE CLONE AUDIO FILE INVALID")
+    print(f"[VOICE CLONE] COMPLETE output={output_path} size={os.path.getsize(output_path)}", flush=True)
+    return output_path
+
 def generate_voiceover_audio(text, output_path):
     """
     Создаёт MP3 voice-over через gTTS.
@@ -3832,7 +3900,7 @@ def process_video_job(
     target_duration_override=None,
     use_captions=None,
     use_voiceover=False,
-    voiceover_text=None, website_url=None,
+    voiceover_text=None, voice_sample_path=None, voice_sample_text=None, website_url=None,
 ):
     print(f"[JOB {job_id}] START mode={mode} files={len(files_meta)} topic={bool(topic)}", flush=True)
     try:
@@ -3923,27 +3991,16 @@ def process_video_job(
             try:
                 if not voiceover_text:
                     raise RuntimeError("VOICEOVER TEXT NOT PROVIDED")
-
-                voiceover_path = os.path.join(
-                    job_dir,
-                    "voiceover.mp3"
-                )
-
-                generate_voiceover_audio(
-                    voiceover_text,
-                    voiceover_path
-                )
-
-                print(
-                    f"[AI VOICEOVER] READY path={voiceover_path}",
-                    flush=True
-                )
-
+                if voice_sample_path:
+                    voiceover_path = os.path.join(job_dir, "voiceover.wav")
+                    generate_qwen_voice_clone_audio(voice_sample_path, voice_sample_text, voiceover_text, voiceover_path, language="Russian", model_size="1.7B")
+                    print(f"[VOICE CLONE] READY path={voiceover_path}", flush=True)
+                else:
+                    voiceover_path = os.path.join(job_dir, "voiceover.mp3")
+                    generate_voiceover_audio(voiceover_text, voiceover_path)
+                    print(f"[AI VOICEOVER] READY path={voiceover_path}", flush=True)
             except Exception as e:
-                print(
-                    f"[AI VOICEOVER] ERROR: {e}",
-                    flush=True
-                )
+                print(f"[VOICEOVER] ERROR: {e}", flush=True)
                 raise
 
         if target_duration_override:
@@ -4333,7 +4390,7 @@ PROMPT_PREVIEW_HTML = """
             Видео, музыка и визуалы пока не создаются.
         </div>
 
-        <form action="/create_reel_from_prompt" method="post">
+        <form action="/create_reel_from_prompt" method="post" enctype="multipart/form-data">
               {% if website_url %}<div style="margin-bottom:12px;color:#a855f7;font-size:14px;">🌐 Сайт: {{ website_url }}</div>{% endif %}
               <input type="hidden" name="website_url" value="{{ website_url }}">
             <textarea name="topic" required>{{ prepared_prompt }}</textarea>
@@ -4351,11 +4408,32 @@ PROMPT_PREVIEW_HTML = """
 
                 <label class="option-row">
                     <span>
-                        <b>Голос за кадром</b>
-                        <small>AI создаст озвучку по сценам</small>
+                        <b>Озвучка</b>
+                        <small>Выбери способ озвучки Reels</small>
                     </span>
-                    <input type="checkbox" name="editor_voiceover" value="1">
+                    <select name="editor_voice_mode" id="editor_voice_mode" style="padding:8px 10px;border-radius:8px;background:#11111a;color:#fff;border:1px solid #30303a;">
+                        <option value="none">Без озвучки</option>
+                        <option value="ai">AI-голос</option>
+                        <option value="clone">Мой голос</option>
+                    </select>
                 </label>
+
+                <div id="voice_clone_upload" style="display:none;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;">
+                    <div style="font-weight:600;margin-bottom:6px;">🎙️ Образец моего голоса</div>
+                    <small style="display:block;margin-bottom:8px;color:#9ca3af;">Загрузи короткий образец голоса для voice clone.</small>
+                    <input class="file" type="file" name="voice_sample" accept="audio/*">
+                    <input type="text" name="voice_sample_text" placeholder="Точный текст, произнесённый в образце голоса" style="width:100%;margin-top:8px;padding:9px 10px;border-radius:8px;background:#11111a;color:#fff;border:1px solid #30303a;">
+                </div>
+
+                <script>
+                const voiceMode = document.getElementById("editor_voice_mode");
+                const voiceUpload = document.getElementById("voice_clone_upload");
+                function updateVoiceUpload() {
+                    voiceUpload.style.display = voiceMode.value === "clone" ? "block" : "none";
+                }
+                voiceMode.addEventListener("change", updateVoiceUpload);
+                updateVoiceUpload();
+                </script>
 
                 <div class="subtitle-position">
                     <div class="position-title">Положение титров</div>
@@ -4486,6 +4564,13 @@ def create_reel_from_prompt():
     # Чекбоксы явно определяют, нужны ли титры и voice-over.
     editor_use_captions = request.form.get("editor_captions") == "1"
     editor_use_voiceover = request.form.get("editor_voiceover") == "1"
+    editor_voice_mode = request.form.get("editor_voice_mode", "none").strip().lower()
+    voice_sample = request.files.get("voice_sample")
+    voice_sample_text = (request.form.get("voice_sample_text") or "").strip()
+    if editor_voice_mode not in ("none", "ai", "clone"):
+        editor_voice_mode = "none"
+    if editor_voice_mode == "clone" and (not voice_sample or not voice_sample.filename):
+        return "Для режима «Мой голос» загрузи образец голоса.", 400
     editor_subtitle_position = request.form.get(
         "editor_subtitle_position",
         "bottom"
@@ -4511,6 +4596,15 @@ def create_reel_from_prompt():
     job_dir = os.path.join(UPLOAD_DIR, job_id)
     os.makedirs(job_dir, exist_ok=True)
 
+    voice_sample_path = None
+    if editor_voice_mode == "clone" and voice_sample:
+        ext = os.path.splitext(voice_sample.filename or "")[1].lower()
+        if ext not in (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".webm"):
+            return "Неподдерживаемый формат образца голоса.", 400
+        voice_sample_path = os.path.join(job_dir, "voice_sample" + ext)
+        voice_sample.save(voice_sample_path)
+        print(f"[VOICE CLONE] sample saved={voice_sample_path} size={os.path.getsize(voice_sample_path)}", flush=True)
+
     set_job(
         job_id,
         status="processing",
@@ -4518,6 +4612,7 @@ def create_reel_from_prompt():
         topic=topic, website_url=website_url,
         editor_use_captions=editor_use_captions,
         editor_use_voiceover=editor_use_voiceover,
+        editor_voice_mode=editor_voice_mode,
         editor_subtitle_position=editor_subtitle_position,
     )
 
@@ -4535,7 +4630,7 @@ def create_reel_from_prompt():
             # Настройки редактора имеют приоритет над тем,
             # что AI предположил в плане.
             scene_plan["use_captions"] = editor_use_captions
-            scene_plan["use_voiceover"] = editor_use_voiceover
+            scene_plan["use_voiceover"] = editor_voice_mode != "none"
 
             if editor_use_captions:
                 topic_for_render = (
@@ -4641,7 +4736,7 @@ def create_reel_from_prompt():
             prompt_voiceover_text = None
 
             if prompt_use_voiceover:
-                prompt_voiceover_text = generate_voiceover_text(scene_plan)
+                prompt_voiceover_text = (" ".join(str(scene.get("caption", "")).strip() for scene in scene_plan.get("scenes", []) if str(scene.get("caption", "")).strip()) if editor_voice_mode == "clone" else generate_voiceover_text(scene_plan))
                 print(
                     f"[PROMPT VOICEOVER TEXT] length={len(prompt_voiceover_text or '')}",
                     flush=True
@@ -4667,6 +4762,8 @@ def create_reel_from_prompt():
                 use_captions=prompt_use_captions,
                 use_voiceover=prompt_use_voiceover,
                 voiceover_text=prompt_voiceover_text,
+                voice_sample_path=voice_sample_path,
+                voice_sample_text=voice_sample_text,
                 website_url=website_url,
             )
 
