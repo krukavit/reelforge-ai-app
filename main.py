@@ -1075,12 +1075,14 @@ def generate_prompt_scene_plan(topic, website_text="", retry=False):
 4. Создай 6–10 сцен.
 5. Для каждой сцены создай короткое описание происходящего на экране на языке запроса пользователя.
 6. Поля title и caption должны быть на языке запроса пользователя. Если запрос пользователя на русском — пиши по-русски. Если на английском — пиши по-английски. Не переводи запрос пользователя на другой язык без явной просьбы.
-6. Это описание НЕ является титром и НЕ будет показываться поверх видео.
-7. Для каждой сцены создай точный поисковый запрос на английском языке.
-8. Поисковый запрос должен описывать реальный визуальный объект, место, человека, действие или событие.
-9. Не придумывай несуществующие факты.
-10. Не добавляй объяснения.
-11. Верни ТОЛЬКО валидный JSON.
+7. Это описание НЕ является титром и НЕ будет показываться поверх видео.
+8. Для каждой сцены создай точный поисковый запрос на английском языке.
+9. Для каждой сцены создай отдельную короткую фразу voiceover для закадровой озвучки. Она должна передавать смысл сцены, а не повторять исходный промт.
+10. voiceover использует только информацию из сцены и звучит естественно при озвучке.
+11. Поисковый запрос должен описывать реальный визуальный объект, место, человека, действие или событие.
+12. Не придумывай несуществующие факты.
+13. Не добавляй объяснения.
+14. Верни ТОЛЬКО валидный JSON.
 
 Формат:
 {
@@ -1091,6 +1093,7 @@ def generate_prompt_scene_plan(topic, website_text="", retry=False):
   "scenes": [
     {
       "caption": "описание сцены",
+        "voiceover": "короткая фраза диктора для этой сцены",
       "search": "English visual search query"
     }
   ]
@@ -1137,10 +1140,12 @@ def generate_prompt_scene_plan(topic, website_text="", retry=False):
 
         caption = str(scene.get("caption", "")).strip()
         search = str(scene.get("search", "")).strip()
+        voiceover = str(scene.get("voiceover", "")).strip()
 
-        if caption and search:
+        if caption and search and voiceover:
             clean_scenes.append({
                 "caption": caption[:300],
+                "voiceover": voiceover[:500],
                 "search": search[:300],
             })
 
@@ -2805,9 +2810,9 @@ def generate_voiceover_text(scene_plan):
         return ""
 
     scene_text = "\n".join(
-        str(scene.get("caption", "")).strip()
+        str(scene.get("voiceover", "")).strip()
         for scene in scenes
-        if str(scene.get("caption", "")).strip()
+        if str(scene.get("voiceover", "")).strip()
     )
 
     if not scene_text:
@@ -4877,7 +4882,7 @@ def create_reel_from_prompt():
             prompt_voiceover_text = None
 
             if prompt_use_voiceover:
-                prompt_voiceover_text = (" ".join(str(scene.get("caption", "")).strip() for scene in scene_plan.get("scenes", []) if str(scene.get("caption", "")).strip()) if editor_voice_mode == "clone" else generate_voiceover_text(scene_plan))
+                prompt_voiceover_text = (" ".join(str(scene.get("voiceover", "")).strip() for scene in scene_plan.get("scenes", []) if str(scene.get("voiceover", "")).strip()) if editor_voice_mode == "clone" else generate_voiceover_text(scene_plan))
                 print(
                     f"[PROMPT VOICEOVER TEXT] length={len(prompt_voiceover_text or '')}",
                     flush=True
