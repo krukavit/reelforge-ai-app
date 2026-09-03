@@ -642,7 +642,9 @@ def fetch_website_text(url):
                 headers={"User-Agent": "ReelForgeAI/1.0"}
             )
             response.raise_for_status()
-        except Exception:
+        except Exception as e:
+            if not visited:
+                raise RuntimeError("Не удалось открыть сайт. Проверьте адрес сайта и попробуйте снова.") from e
             continue
 
         visited.add(current)
@@ -4460,6 +4462,8 @@ def prepare_prompt():
         import traceback
         print(f"[PROMPT PREVIEW] ERROR: {e}", flush=True)
         traceback.print_exc()
+        if isinstance(e, RuntimeError) and str(e) == "Не удалось открыть сайт. Проверьте адрес сайта и попробуйте снова.":
+            return str(e), 400
         return f"Ошибка подготовки промта: {e}", 500
 
 
@@ -4467,7 +4471,12 @@ def prepare_prompt():
 def create_reel_from_prompt():
     topic = request.form.get("topic", "").strip()
     website_url = request.form.get("website_url", "").strip()
-    website_text = fetch_website_text(website_url) if website_url else ""
+    try:
+        website_text = fetch_website_text(website_url) if website_url else ""
+    except RuntimeError as e:
+        if str(e) == "Не удалось открыть сайт. Проверьте адрес сайта и попробуйте снова.":
+            return str(e), 400
+        raise
 
     # Настройки редактора Prompt Mode.
     # Чекбоксы явно определяют, нужны ли титры и voice-over.
