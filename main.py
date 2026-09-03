@@ -1518,7 +1518,7 @@ input[type=file]::file-selector-button{
 
             <div id="main_voice_record_time" style="margin-top:6px;text-align:center;font-size:13px;">00:00 / 00:20</div>
             <button type="button" id="main_voice_upload_btn" style="width:100%;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;background:#11111a;color:#fff;font-size:15px;font-weight:600;">📁 Загрузить из памяти телефона</button>
-            <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac" style="display:none;">
+            <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
             <input type="hidden" name="voice_sample_text" value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
         </div>
 
@@ -2569,7 +2569,7 @@ RESULT_HTML = """
             <form action="/prepare_reel" method="post" style="margin:0;">
                 <input type="hidden" name="website_url" value="{{ website_url }}">
 
-                <textarea name="script" style="display:none;">{{ script }}</textarea>
+                <textarea name="script" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">{{ script }}</textarea>
                 <button class="button download" type="submit" style="border:0;cursor:pointer;">
                     🎬 Создать Reels из этого сценария
                 </button>
