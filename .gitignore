@@ -1,4 +1,10 @@
 .env
-.env
-.env
-.env
+
+# Local backups and test artifacts
+__pycache__/
+*.backup-*
+main.rollback.*
+reelforge-ai-working-backup-*.tar.gz
+rf-cookies.txt
+rf-headers.txt
+.gitignore.backup-*
