@@ -4157,6 +4157,9 @@ footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
       <p><strong>Вам доступны 3 бесплатные генерации.</strong></p>
 
       <form action="/collect-email" method="get">
+        {% if website_url %}
+        <input type="hidden" name="website_url" value="{{ website_url }}">
+        {% endif %}
         <div class="field">
           <label for="rf-email">Ваш email</label>
           <input id="rf-email" name="email" type="email"
@@ -4201,7 +4204,7 @@ footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
       <form action="/prepare_prompt" method="post" enctype="multipart/form-data">
         <div class="field">
           <label>Сайт или ссылка на материал — необязательно</label>
-          <input name="website_url" type="url" placeholder="https://example.com">
+          <input name="website_url" type="url" value="{{ website_url|default('') }}" placeholder="https://example.com">
         </div>
         <div class="field">
           <label>Идея для Reels</label>
@@ -4371,16 +4374,19 @@ def create():
         CREATE_HTML,
         upload_progress_html=UPLOAD_PROGRESS_HTML,
         generated_script=request.args.get("script", ""),
+        website_url=request.args.get("website_url", "").strip(),
         has_user=bool(request.cookies.get("rf_user_key"))
     )
 
 @app.route("/prepare_reel", methods=["POST"])
 def prepare_reel():
     script = request.form.get("script", "")
+    website_url = request.form.get("website_url", "").strip()
     return render_template_string(
         CREATE_HTML,
         upload_progress_html=UPLOAD_PROGRESS_HTML,
         generated_script=script,
+        website_url=website_url,
         has_user=bool(request.cookies.get("rf_user_key"))
     )
 
@@ -7688,6 +7694,7 @@ def admin_reset_user():
 @app.route("/collect-email", methods=["GET"])
 def collect_email():
     email = (request.args.get("email") or "").strip().lower()
+    website_url = (request.args.get("website_url") or "").strip()
 
     if not email:
         return "Email не указан", 400
@@ -7716,7 +7723,12 @@ def collect_email():
         print(f"[EMAIL] ERROR: {e}", flush=True)
         return "Ошибка сохранения email", 500
 
-    response = redirect("/create")
+    redirect_target = "/create"
+    if website_url:
+        from urllib.parse import urlencode
+        redirect_target += "?" + urlencode({"website_url": website_url})
+
+    response = redirect(redirect_target)
 
     response.set_cookie(
         "rf_user_key",
