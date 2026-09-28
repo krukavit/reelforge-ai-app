@@ -1765,6 +1765,7 @@ footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
   }
   if(mode){mode.addEventListener('change',syncVoice);syncVoice()}
 
+
   const history=document.getElementById('jobHistory');
   if(history){
     try{
@@ -2202,7 +2203,7 @@ RESULT_HTML = """
                 >
                     🔄 Создать новую версию
                 </button>
-                  <a href="javascript:history.back()" class="button" style="width:auto;display:inline-block;margin-left:6px;padding:10px 12px;background:#22222e;color:#fff;">↩ Вернуться к результату</a>
+                  <a href="#" onclick="event.preventDefault(); const t=document.querySelector('textarea[name=topic]'); if(t) window.location.href='/create?script=' + encodeURIComponent(t.value); return false;" class="button" style="width:auto;display:inline-block;margin-left:6px;padding:10px 12px;background:#22222e;color:#fff;">↩ Вернуться к созданию</a>
 
             </form>
         </div>
@@ -4220,10 +4221,35 @@ footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
         </div>
         <div class="field" id="voice_sample_wrap" style="display:none">
           <label>Образец голоса</label>
-          <input type="file" name="voice_sample" id="main_voice_sample"
-                 accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac">
-          <input type="hidden" name="voice_sample_text"
-                 value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
+          <div style="padding:12px;border:1px solid #30303a;border-radius:10px;background:#11111a;">
+            <div style="font-weight:600;margin-bottom:7px;">🎙️ Запиши свой голос</div>
+            <div style="padding:10px;background:#0b0b12;border-radius:8px;color:#c9c9d4;font-size:14px;margin-bottom:10px;">
+              Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео.
+              Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!
+            </div>
+            <div style="height:7px;background:#252532;border-radius:999px;overflow:hidden;margin:9px 0;">
+              <div id="main_voice_record_progress" style="width:0%;height:100%;background:#a855f7;transition:width .1s;"></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" id="main_voice_record_btn"
+                      style="flex:1;min-width:190px;padding:11px 14px;border:0;border-radius:10px;background:#252532;color:#fff;font-weight:600;">
+                🎙️ Удерживай для записи
+              </button>
+              <button type="button" id="main_voice_upload_btn"
+                      style="padding:11px 14px;border:1px solid #383846;border-radius:10px;background:#181820;color:#fff;">
+                📁 Из телефона
+              </button>
+            </div>
+            <div id="main_voice_record_status" style="margin-top:8px;color:#9ca3af;font-size:13px;">Максимум 20 секунд</div>
+            <div id="main_voice_record_time" style="color:#777784;font-size:12px;">00:00 / 00:20</div>
+            <audio id="main_voice_preview" controls preload="none"
+                   style="display:none;width:100%;margin-top:10px;"></audio>
+            <input type="file" name="voice_sample" id="main_voice_sample"
+                   accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac"
+                   style="display:none;">
+            <input type="hidden" name="voice_sample_text"
+                   value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
+          </div>
         </div>
         <div class="form-actions">
           <button class="primary" type="submit">Подготовить Reel</button>
@@ -4321,6 +4347,178 @@ footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
     if(input) input.required=mode.value==='clone';
   }
   if(mode){mode.addEventListener('change',syncVoice);syncVoice()}
+
+  const voiceSample=document.getElementById('main_voice_sample');
+  const voiceRecordBtn=document.getElementById('main_voice_record_btn');
+  const voiceUploadBtn=document.getElementById('main_voice_upload_btn');
+  const voicePreview=document.getElementById('main_voice_preview');
+  const voiceStatus=document.getElementById('main_voice_record_status');
+  const voiceProgress=document.getElementById('main_voice_record_progress');
+  const voiceTime=document.getElementById('main_voice_record_time');
+
+  let voiceRecorder=null;
+  let voiceChunks=[];
+  let voiceStream=null;
+  let voiceTimer=null;
+  let voiceStartedAt=0;
+  let voiceHeld=false;
+  let voicePreviewUrl=null;
+  const VOICE_MAX_MS=20000;
+
+  function voiceFormatTime(ms){
+    const sec=Math.min(20,Math.floor(ms/1000));
+    return "00:"+String(sec).padStart(2,"0");
+  }
+
+  function stopVoiceStream(){
+    if(voiceStream){
+      voiceStream.getTracks().forEach(t=>t.stop());
+      voiceStream=null;
+    }
+  }
+
+  function stopVoiceRecording(){
+    if(voiceRecorder && voiceRecorder.state==="recording"){
+      voiceRecorder.stop();
+    }
+  }
+
+  function startVoiceRecording(){
+    if(!voiceRecordBtn || !voiceSample) return;
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder){
+      voiceStatus.textContent="Запись голоса не поддерживается этим браузером.";
+      return;
+    }
+
+    if(voiceRecorder && voiceRecorder.state==="recording") return;
+
+    navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
+      if(!voiceHeld){
+        stream.getTracks().forEach(t=>t.stop());
+        return;
+      }
+
+      voiceStream=stream;
+      voiceChunks=[];
+      voiceStartedAt=Date.now();
+
+      let mime="audio/webm";
+      if(!MediaRecorder.isTypeSupported(mime)) mime="audio/webm;codecs=opus";
+
+      try{
+        voiceRecorder=new MediaRecorder(stream,{mimeType:mime});
+      }catch(e){
+        voiceRecorder=new MediaRecorder(stream);
+      }
+
+      voiceRecorder.ondataavailable=function(e){
+        if(e.data && e.data.size) voiceChunks.push(e.data);
+      };
+
+      voiceRecorder.onstop=function(){
+        clearInterval(voiceTimer);
+        voiceTimer=null;
+        stopVoiceStream();
+
+        const elapsed=Math.min(VOICE_MAX_MS,Date.now()-voiceStartedAt);
+
+        if(elapsed<1000 || !voiceChunks.length){
+          voiceStatus.textContent="Запись слишком короткая. Удерживай кнопку не менее 1 секунды.";
+          voiceProgress.style.width="0%";
+          voiceTime.textContent="00:00 / 00:20";
+          return;
+        }
+
+        const blob=new Blob(voiceChunks,{type:"audio/webm"});
+        const file=new File([blob],"voice_sample.webm",{type:"audio/webm"});
+        const dt=new DataTransfer();
+        dt.items.add(file);
+        voiceSample.files=dt.files;
+
+        if(voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+        voicePreviewUrl=URL.createObjectURL(blob);
+        voicePreview.src=voicePreviewUrl;
+        voicePreview.style.display="block";
+
+        voiceStatus.textContent="✓ Голос записан — можно прослушать или перезаписать";
+        voiceRecordBtn.textContent="🎙️ Удерживай для перезаписи";
+      };
+
+      voiceRecorder.start();
+      voiceRecordBtn.textContent="🔴 Идёт запись… отпусти";
+      voiceStatus.textContent="Говори естественно";
+      voiceProgress.style.width="0%";
+      voiceTime.textContent="00:00 / 00:20";
+
+      voiceTimer=setInterval(function(){
+        const elapsed=Date.now()-voiceStartedAt;
+        const limited=Math.min(elapsed,VOICE_MAX_MS);
+        voiceProgress.style.width=(limited/VOICE_MAX_MS*100)+"%";
+        voiceTime.textContent=voiceFormatTime(limited)+" / 00:20";
+
+        if(elapsed>=VOICE_MAX_MS) stopVoiceRecording();
+      },100);
+
+    }).catch(function(){
+      voiceStatus.textContent="Не удалось получить доступ к микрофону. Разреши доступ и попробуй снова.";
+    });
+  }
+
+  if(voiceRecordBtn){
+    voiceRecordBtn.addEventListener("pointerdown",function(e){
+      e.preventDefault();
+      voiceHeld=true;
+      startVoiceRecording();
+    });
+
+    voiceRecordBtn.addEventListener("pointerup",function(e){
+      e.preventDefault();
+      voiceHeld=false;
+      stopVoiceRecording();
+      voiceRecordBtn.blur();
+    });
+
+    voiceRecordBtn.addEventListener("pointercancel",function(){
+      voiceHeld=false;
+      stopVoiceRecording();
+    });
+
+    voiceRecordBtn.addEventListener("click",function(e){
+      e.preventDefault();
+    });
+  }
+
+  window.addEventListener("pointerup",function(){
+    if(voiceHeld){
+      voiceHeld=false;
+      stopVoiceRecording();
+      if(voiceRecordBtn) voiceRecordBtn.blur();
+    }
+  });
+
+  if(voiceUploadBtn && voiceSample){
+    voiceUploadBtn.addEventListener("click",function(e){
+      e.preventDefault();
+      voiceSample.click();
+    });
+  }
+
+  if(voiceSample){
+    voiceSample.addEventListener("change",function(){
+      if(!voiceSample.files || !voiceSample.files.length) return;
+
+      const file=voiceSample.files[0];
+      voiceStatus.textContent="✓ Файл выбран — "+file.name;
+      voiceRecordBtn.textContent="🎙️ Удерживай для новой записи";
+
+      if(voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+      voicePreviewUrl=URL.createObjectURL(file);
+      voicePreview.src=voicePreviewUrl;
+      voicePreview.style.display="block";
+    });
+  }
+
 
   const history=document.getElementById('jobHistory');
   if(history){
