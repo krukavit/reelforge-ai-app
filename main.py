@@ -1308,903 +1308,511 @@ def get_font_path():
     return _font_path
 
 INDEX_HTML = """
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ReelForge AI — Создание Reels</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07070d">
+<title>ReelForge AI — Создание Reels с помощью ИИ</title>
+<meta name="description" content="Создавайте Reels из идеи, скриншотов и видео с помощью ИИ. Сценарий, озвучка, субтитры, музыка и монтаж.">
 
 <style>
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{
-    margin:0;
-    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
-    background:
-      radial-gradient(circle at 10% 0%,rgba(168,85,247,.18),transparent 32%),
-      radial-gradient(circle at 90% 10%,rgba(236,72,153,.14),transparent 30%),
-      #07070d;
-    color:#fff;
-    min-height:100vh;
+ margin:0;background:#07070d;color:#f8fafc;
+ font-family:Inter,Arial,sans-serif;line-height:1.5;
 }
-.container{max-width:900px;margin:auto;padding:20px}
-.header{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:10px 0 35px;
+a{color:inherit;text-decoration:none}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+.container{width:min(1160px,calc(100% - 32px));margin:auto}
+.topbar{
+ position:sticky;top:0;z-index:30;
+ background:rgba(7,7,13,.88);backdrop-filter:blur(16px);
+ border-bottom:1px solid #1d1d29;
 }
-.logo{
-    font-size:25px;font-weight:900;
-    background:linear-gradient(90deg,#a855f7,#ec4899);
-    -webkit-background-clip:text;background-clip:text;color:transparent;
+.nav{min-height:68px;display:flex;align-items:center;gap:22px}
+.logo{font-size:20px;font-weight:900;letter-spacing:-.5px}
+.logo span{color:#a855f7}
+.navlinks{display:flex;gap:18px;margin-left:auto;color:#a8a8b8;font-size:14px}
+.navlinks a:hover{color:#fff}
+.navcta,.primary{
+ display:inline-flex;align-items:center;justify-content:center;
+ border:0;border-radius:12px;padding:12px 18px;
+ background:linear-gradient(135deg,#8b5cf6,#c026d3);
+ color:#fff;font-weight:800;box-shadow:0 10px 30px rgba(139,92,246,.22);
 }
-.badge{
-    padding:7px 12px;border-radius:999px;
-    background:rgba(168,85,247,.12);
-    border:1px solid rgba(168,85,247,.25);
-    color:#c084fc;font-size:12px;
+.secondary{
+ display:inline-flex;align-items:center;justify-content:center;
+ border:1px solid #343445;border-radius:12px;padding:12px 18px;
+ background:#11111a;color:#fff;font-weight:700;
 }
-.hero{text-align:center;padding:25px 0 35px}
-.hero h1{
-    font-size:clamp(38px,8vw,68px);
-    line-height:1.02;margin:0 0 18px;font-weight:900;
+.hero{
+ padding:82px 0 55px;
+ background:
+ radial-gradient(circle at 50% 0%,rgba(124,58,237,.22),transparent 42%),
+ radial-gradient(circle at 10% 30%,rgba(217,70,239,.09),transparent 30%);
 }
-.gradient{
-    background:linear-gradient(90deg,#a855f7,#ec4899);
-    -webkit-background-clip:text;background-clip:text;color:transparent;
+.hero-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:50px;align-items:center}
+.eyebrow{
+ display:inline-flex;padding:7px 12px;border:1px solid #303043;border-radius:999px;
+ color:#c4b5fd;background:#11111b;font-size:13px;font-weight:800;
 }
-.hero p{color:#9ca3af;font-size:17px;line-height:1.6;max-width:650px;margin:0 auto}
-.free{
-    display:inline-block;margin-bottom:20px;padding:8px 15px;
-    border-radius:999px;background:rgba(168,85,247,.10);
-    border:1px solid rgba(168,85,247,.25);color:#d8b4fe;font-size:14px;
+h1{font-size:clamp(42px,6vw,72px);line-height:1.02;letter-spacing:-2.8px;margin:18px 0}
+.hero p{font-size:19px;color:#a7a7b7;max-width:690px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin:28px 0 18px}
+.note{font-size:13px;color:#777789}
+.hero-card{
+ border:1px solid #29293a;background:linear-gradient(180deg,#12121c,#0d0d14);
+ border-radius:28px;padding:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);
 }
+.hero-video{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:20px;background:#020307}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.badge{padding:7px 10px;border-radius:999px;background:#171722;border:1px solid #29293a;color:#bfc0ce;font-size:12px}
+section{padding:72px 0}
+.section-head{max-width:760px;margin-bottom:30px}
+.kicker{color:#a78bfa;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.2px}
+h2{font-size:clamp(30px,4vw,48px);line-height:1.08;letter-spacing:-1.5px;margin:9px 0 12px}
+.section-head p{color:#9293a4;font-size:17px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .card{
-    background:rgba(17,17,27,.82);
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:24px;padding:25px;margin:18px 0;
-    box-shadow:0 20px 60px rgba(0,0,0,.28);
-    backdrop-filter:blur(14px);
+ background:#0e0e16;border:1px solid #242434;border-radius:20px;padding:24px;
 }
-.card h2{margin:0 0 8px;font-size:21px}
-.card-desc{margin:0 0 20px;color:#8b8f9b;font-size:14px;line-height:1.5}
-label{display:block;margin:18px 0 8px;font-weight:700;font-size:14px}
-textarea{
-    width:100%;min-height:105px;resize:vertical;
-    background:#0b0b13;color:#fff;border:1px solid #252533;
-    border-radius:14px;padding:15px;font-size:15px;outline:none;
-    transition:.2s;
+.card h3{margin:8px 0;font-size:21px}
+.card p{margin:0 0 18px;color:#9293a4}
+.icon{font-size:30px}
+.card .secondary{width:100%}
+.demo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.demo{
+ background:#0e0e16;border:1px solid #252536;border-radius:20px;padding:10px;
 }
-textarea:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.12)}
-.file{
-    width:100%;padding:14px;border:1px dashed #39394a;
-    border-radius:14px;background:#0b0b13;color:#9ca3af;
+.demo video{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:14px;background:#020307}
+.demo-title{font-weight:850;padding:13px 5px 2px}
+.demo-text{font-size:13px;color:#77798b;padding:2px 5px 9px}
+.variant{
+ display:grid;grid-template-columns:1fr 1fr;gap:25px;align-items:center;
+ background:linear-gradient(135deg,#12101d,#0d0d15);
+ border:1px solid #29283b;border-radius:26px;padding:32px;
 }
-.website-input{width:100%;padding:15px;border-radius:14px;background:#0b0b13;color:#fff;border:1px solid #252533;font-size:15px;outline:none;transition:.2s;box-sizing:border-box;}
-input[type=file]::file-selector-button{
-    background:linear-gradient(90deg,#7c3aed,#db2777);
-    color:#fff;border:0;border-radius:9px;padding:9px 13px;
-    margin-right:10px;font-weight:700;
+.variant-list{display:grid;gap:10px}
+.variant-item{
+ padding:15px;border-radius:14px;background:#151520;border:1px solid #29293a;
 }
-.btn{
-    width:100%;border:0;border-radius:14px;padding:15px;
-    margin-top:20px;color:white;font-size:16px;font-weight:800;
-    cursor:pointer;
-    background:linear-gradient(90deg,#9333ea,#ec4899);
-    box-shadow:0 10px 30px rgba(168,85,247,.22);
-    transition:.2s;
-}
-.btn:hover{transform:translateY(-1px);box-shadow:0 14px 35px rgba(168,85,247,.3)}
-.btn:disabled{opacity:.65;cursor:wait;transform:none}
-.divider{height:1px;background:rgba(255,255,255,.07);margin:30px 0}
-.features{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:25px
-}
-.feature{
-    text-align:center;padding:16px 10px;border-radius:16px;
-    background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06);
-}
-.feature b{display:block;font-size:18px;margin-bottom:5px}
-.feature span{color:#858997;font-size:12px}
-.footer{text-align:center;color:#555967;font-size:12px;padding:35px 0}
-
-.overlay{
-    display:none;position:fixed;inset:0;z-index:9999;
-    background:rgba(4,4,9,.94);backdrop-filter:blur(10px);
-    align-items:center;justify-content:center;padding:25px;
-}
-.loader-box{
-    width:min(440px,100%);text-align:center;
-    background:#11111b;border:1px solid #29293a;border-radius:26px;
-    padding:30px;box-shadow:0 25px 80px rgba(0,0,0,.55);
-}
-.spinner{
-    width:58px;height:58px;margin:0 auto 20px;
-    border:5px solid #29293a;border-top-color:#c026d3;
-    border-right-color:#9333ea;border-radius:50%;
-    animation:spin .8s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
-.loader-box h2{margin:0 0 8px}
-.loader-box p{color:#8b8f9b;margin:0 0 20px}
-.timer{font-size:28px;font-weight:900;margin:15px 0}
-.progress{
-    height:8px;background:#252533;border-radius:99px;overflow:hidden;margin:20px 0
-}
-.progress-bar{
-    width:15%;height:100%;
-    background:linear-gradient(90deg,#9333ea,#ec4899);
-    border-radius:99px;animation:progress 12s ease-in-out infinite;
-}
-@keyframes progress{
-    0%{width:10%}35%{width:38%}65%{width:67%}90%{width:88%}100%{width:94%}
-}
-.steps{text-align:left;margin-top:20px}
+.variant-item b{display:block;margin-bottom:3px}
+.variant-item span{color:#858697;font-size:13px}
+.pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .step{
-    display:flex;gap:10px;align-items:center;
-    color:#555967;padding:8px 0;font-size:14px;
+ position:relative;padding:18px 15px;background:#101019;
+ border:1px solid #272737;border-radius:16px;
 }
-.step.active{color:#fff}
-.dot{
-    width:9px;height:9px;border-radius:50%;background:#343444;flex:none
+.step-num{color:#a78bfa;font-weight:900;font-size:12px}
+.step b{display:block;margin-top:5px}
+.pricing{
+ display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
 }
-.step.active .dot{background:#c026d3;box-shadow:0 0 12px #c026d3}
-
-@media(max-width:600px){
-    .container{padding:14px}
-    .header{padding-bottom:20px}
-    .hero{padding:20px 0}
-    .hero h1{font-size:43px}
-    .hero p{font-size:15px}
-    .card{padding:19px;border-radius:20px}
-    .features{grid-template-columns:1fr}
+.price{
+ background:#0e0e16;border:1px solid #272737;border-radius:20px;padding:26px;
+}
+.price.featured{border-color:#7c3aed;box-shadow:0 0 0 1px rgba(124,58,237,.2)}
+.price h3{margin:0 0 8px;font-size:23px}
+.price-value{font-size:28px;font-weight:900;margin:12px 0}
+.price p,.price li{color:#9293a4}
+.price ul{padding-left:20px;min-height:95px}
+.faq{display:grid;gap:10px;max-width:900px}
+details{background:#0e0e16;border:1px solid #272737;border-radius:15px;padding:17px 19px}
+summary{cursor:pointer;font-weight:800}
+details p{color:#9293a4;margin:12px 0 0}
+.final{
+ text-align:center;padding:70px 20px;border-radius:28px;
+ background:radial-gradient(circle at 50% 0%,rgba(124,58,237,.24),transparent 60%),#0e0e16;
+ border:1px solid #28283a;
+}
+.form-shell{
+ margin-top:25px;background:#0d0d15;border:1px solid #29293a;border-radius:22px;padding:22px;
+}
+.field{margin:12px 0}
+.field label{display:block;font-size:13px;color:#b4b4c2;margin-bottom:7px;font-weight:700}
+.field input,.field textarea,.field select{
+ width:100%;padding:13px;border-radius:11px;border:1px solid #30303f;
+ background:#11111a;color:#fff;outline:none;
+}
+.field textarea{min-height:105px;resize:vertical}
+.file{
+ width:100%;padding:12px;border:1px dashed #3a3a4c;border-radius:12px;
+ background:#0f0f18;color:#aaa;
+}
+.form-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+.history{
+ display:grid;gap:8px;margin-top:15px;
+}
+.history-item{
+ padding:12px 14px;border:1px solid #242434;border-radius:12px;
+ background:#0f0f17;color:#aaa;font-size:13px;
+}
+footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
+.footer-row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.muted{color:#77798b}
+.upload-progress{margin-top:15px}
+@media(max-width:850px){
+ .navlinks{display:none}
+ .hero{padding-top:55px}
+ .hero-grid,.variant{grid-template-columns:1fr}
+ .cards,.demo-grid,.pricing{grid-template-columns:1fr}
+ .pipeline{grid-template-columns:repeat(2,1fr)}
+ h1{letter-spacing:-1.8px}
+}
+@media(max-width:520px){
+ .container{width:min(100% - 22px,1160px)}
+ section{padding:50px 0}
+ .nav{min-height:60px}
+ .navcta{padding:10px 12px;font-size:13px}
+ .hero{padding:45px 0 35px}
+ .hero p{font-size:16px}
+ .actions>*{width:100%}
+ .pipeline{grid-template-columns:1fr 1fr}
+ .card,.price{padding:20px}
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-
-<header class="header">
-    <div class="logo">ReelForge AI</div>
-    <div class="badge">⚡ AI VIDEO</div>
+<header class="topbar">
+  <div class="container nav">
+    <a class="logo" href="/">ReelForge <span>AI</span></a>
+    <nav class="navlinks">
+      <a href="/create">Создать видео</a>
+      <a href="#examples">Возможности</a>
+      <a href="#how">Как это работает</a>
+      <a href="#pricing">Тарифы</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <a class="navcta" href="/create">Создать видео</a>
+  </div>
 </header>
 
-<section class="hero">
-    <div class="free">🚀 3 видео бесплатно — без карты</div>
-    <h1>Создавай <span class="gradient">Reels</span><br>за минуты</h1>
-    <p>Генерируй сценарии и собирай вертикальные видео для TikTok, Instagram Reels и YouTube Shorts.</p>
+<main>
 
-    <div class="features">
-        <div class="feature"><b>🤖 AI</b><span>Умный сценарий</span></div>
-        <div class="feature"><b>🎬 9:16</b><span>Формат Reels</span></div>
-        <div class="feature"><b>⚡ Быстро</b><span>Автоматический монтаж</span></div>
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow">✦ AI-инструмент для коротких видео</span>
+      <h1>Создавайте Reels из идеи, скриншотов и видео — с помощью ИИ</h1>
+      <p>
+        Опишите, что хотите показать, или загрузите свои материалы.
+        ReelForge AI помогает превратить их в готовый вертикальный ролик:
+        сценарий, озвучка, субтитры, музыка и монтаж.
+      </p>
+      <div class="actions">
+        <a class="primary" href="/create">Создать видео бесплатно</a>
+        <a class="secondary" href="#examples">Посмотреть примеры</a>
+      </div>
+      <div class="note">Бесплатный старт · до 3 генераций · без сложных настроек</div>
     </div>
+
+    <div class="hero-card">
+      <video class="hero-video" controls playsinline preload="metadata"
+             src="/static/demo/reelforge-real-01.mp4"></video>
+      <div class="badge-row">
+        <span class="badge">9:16</span>
+        <span class="badge">Сценарий</span>
+        <span class="badge">Озвучка</span>
+        <span class="badge">Субтитры</span>
+        <span class="badge">Музыка</span>
+      </div>
+    </div>
+  </div>
 </section>
 
-<div class="card" id="jobHistoryCard" style="display:none;">
-    <h2>🕘 Последние Reels</h2>
-    <div id="jobHistoryList"></div>
+<section id="create">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Создание</div>
+      <h2>Выберите исходные материалы</h2>
+      <p>Начните с идеи, скриншотов или готового видео. Остальное можно настроить позже.</p>
+    </div>
+
+    <div class="cards">
+      <article class="card">
+        <div class="icon">💡</div>
+        <h3>Reels из идеи</h3>
+        <p>Опишите тему, продукт или сюжет. ИИ подготовит сценарий и структуру ролика.</p>
+        <a class="secondary" href="/create#idea-form">Начать с идеи</a>
+      </article>
+
+      <article class="card">
+        <div class="icon">🖼️</div>
+        <h3>Reels из скриншотов</h3>
+        <p>Загрузите изображения, добавьте тему и музыку — получите вертикальный Reel.</p>
+        <a class="secondary" href="/create#screens-form">Загрузить скриншоты</a>
+      </article>
+
+      <article class="card">
+        <div class="icon">🎬</div>
+        <h3>Reels из видео</h3>
+        <p>Загрузите свои клипы. ReelForge соберёт их в короткий ролик с обработкой и субтитрами.</p>
+        <a class="secondary" href="/create#video-form">Загрузить видео</a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="examples">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Примеры</div>
+      <h2>Посмотрите, что получается</h2>
+      <p>Три сценария создания — от одной идеи до готового вертикального видео.</p>
+    </div>
+
+    <div class="demo-grid">
+      <article class="demo">
+        <video controls playsinline preload="metadata" src="/static/demo/reelforge-real-01.mp4"></video>
+        <div class="demo-title">Идея → Reel</div>
+        <div class="demo-text">Сценарий и структура ролика</div>
+      </article>
+      <article class="demo">
+        <video controls playsinline preload="metadata" src="/static/demo/reelforge-real-02.mp4"></video>
+        <div class="demo-title">Скриншоты → Reel</div>
+        <div class="demo-text">Материалы → монтаж → субтитры</div>
+      </article>
+      <article class="demo">
+        <video controls playsinline preload="metadata" src="/static/demo/reelforge-real-03.mp4"></video>
+        <div class="demo-title">Пример Reel 3</div>
+        <div class="demo-text">Реальный пример готового вертикального ролика</div>
+      </article>
+      <article class="demo">
+        <video controls playsinline preload="metadata" src="/static/demo/reelforge-real-04.mp4"></video>
+        <div class="demo-title">Пример Reel 4</div>
+        <div class="demo-text">Реальный пример готового вертикального ролика</div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="variant">
+      <div>
+        <div class="kicker">Варианты</div>
+        <h2>Одна идея → несколько вариантов</h2>
+        <p class="muted">
+          Меняйте подачу, сценарий, визуальные материалы и озвучку,
+          чтобы быстро проверять разные версии одного контента.
+        </p>
+      </div>
+      <div class="variant-list">
+        <div class="variant-item"><b>01 · Динамичный</b><span>Быстрый хук и короткие сцены</span></div>
+        <div class="variant-item"><b>02 · Объясняющий</b><span>Пошаговая подача темы</span></div>
+        <div class="variant-item"><b>03 · Продуктовый</b><span>Фокус на продукте и действии</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Процесс</div>
+      <h2>Как это работает</h2>
+      <p>От исходной идеи до готового вертикального ролика — в одном процессе.</p>
+    </div>
+
+    <div class="pipeline">
+      <div class="step"><div class="step-num">01</div><b>ТЕМА</b></div>
+      <div class="step"><div class="step-num">02</div><b>СЦЕНАРИЙ</b></div>
+      <div class="step"><div class="step-num">03</div><b>ОЗВУЧКА</b></div>
+      <div class="step"><div class="step-num">04</div><b>СЦЕНЫ</b></div>
+      <div class="step"><div class="step-num">05</div><b>СУБТИТРЫ</b></div>
+      <div class="step"><div class="step-num">06</div><b>МУЗЫКА</b></div>
+      <div class="step"><div class="step-num">07</div><b>МОНТАЖ</b></div>
+      <div class="step"><div class="step-num">08</div><b>ГОТОВО</b></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Возможности</div>
+      <h2>Всё необходимое для короткого видео</h2>
+    </div>
+
+    <div class="cards">
+      <article class="card"><div class="icon">✍️</div><h3>Сценарий</h3><p>Создание сценария по теме или исходному материалу.</p></article>
+      <article class="card"><div class="icon">🎙️</div><h3>Озвучка</h3><p>ИИ-озвучка и режим «Мой голос» с загрузкой образца.</p></article>
+      <article class="card"><div class="icon">💬</div><h3>Субтитры</h3><p>Текстовая подача и настройка результата на странице ролика.</p></article>
+      <article class="card"><div class="icon">🎵</div><h3>Музыка</h3><p>Можно загрузить собственную музыку или использовать автоматический подбор.</p></article>
+      <article class="card"><div class="icon">📱</div><h3>Вертикальный формат</h3><p>Результат рассчитан на короткие вертикальные видео 9:16.</p></article>
+      <article class="card"><div class="icon">📦</div><h3>Скачать результат</h3><p>Получайте готовый MP4 и используйте ZIP для скачивания набора файлов.</p></article>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Тарифы</div>
+      <h2>Начните бесплатно</h2>
+      <p>Сейчас доступен бесплатный старт. Платные тарифы подготовлены в системе и будут подключаться отдельно.</p>
+    </div>
+
+    <div class="pricing">
+      <article class="price featured">
+        <h3>Бесплатный старт</h3>
+        <div class="price-value">3 генерации</div>
+        <p>Чтобы попробовать создание Reels без сложной настройки.</p>
+        <ul>
+          <li>Идея → Reel</li>
+          <li>Скриншоты → Reel</li>
+          <li>Видео → Reel</li>
+        </ul>
+        <a class="primary" href="/create">Создать видео</a>
+      </article>
+
+      <article class="price">
+        <h3>Basic</h3>
+        <div class="price-value">Скоро</div>
+        <p>Платный тариф для регулярного создания контента.</p>
+        <ul>
+          <li>Расширенный лимит</li>
+          <li>Баланс видео</li>
+          <li>Рабочий процесс без ручного монтажа</li>
+        </ul>
+      </article>
+
+      <article class="price">
+        <h3>Pro</h3>
+        <div class="price-value">Скоро</div>
+        <p>Расширенный режим для активного использования.</p>
+        <ul>
+          <li>Больше возможностей</li>
+          <li>Расширенный баланс</li>
+          <li>Дополнительные настройки</li>
+        </ul>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">FAQ</div>
+      <h2>Частые вопросы</h2>
+    </div>
+
+    <div class="faq">
+      <details>
+        <summary>Что можно загрузить?</summary>
+        <p>Можно начать с текста, загрузить изображения или несколько видео. Для видео предусмотрена отдельная загрузка с обработкой больших файлов.</p>
+      </details>
+      <details>
+        <summary>Можно ли использовать свой голос?</summary>
+        <p>Да. В режиме «Мой голос» можно записать или загрузить образец голоса.</p>
+      </details>
+      <details>
+        <summary>Можно ли добавить свою музыку?</summary>
+        <p>Да. Для создания из скриншотов и видео можно загрузить аудиофайл.</p>
+      </details>
+      <details>
+        <summary>Сколько генераций доступно бесплатно?</summary>
+        <p>По умолчанию новый пользователь получает до 3 бесплатных генераций.</p>
+      </details>
+      <details>
+        <summary>Что я получу в результате?</summary>
+        <p>Готовый вертикальный ролик. На странице результата также доступны работа с текстом и дополнительные действия с результатом.</p>
+      </details>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="container footer-row">
+    <div>
+      <div class="logo">ReelForge <span>AI</span></div>
+      <div class="muted" style="margin-top:5px">Создание коротких видео с помощью ИИ.</div>
+    </div>
+    <div class="muted">© ReelForge AI</div>
+  </div>
+</footer>
+
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(4,4,9,.9);backdrop-filter:blur(8px);align-items:center;justify-content:center">
+  <div style="text-align:center;padding:30px">
+    <div style="width:48px;height:48px;border:4px solid #333;border-top-color:#a855f7;border-radius:50%;animation:spin 1s linear infinite;margin:auto"></div>
+    <h3 style="margin:20px 0 6px">Готовим ваш Reel…</h3>
+    <p style="color:#999">Не закрывайте страницу во время обработки.</p>
+  </div>
 </div>
+
+<style>
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
 <script>
 (function(){
-  try{
-    const items=JSON.parse(localStorage.getItem('reelforge_job_history')||'[]');
-    if(!items.length)return;
-    const card=document.getElementById('jobHistoryCard');
-    const list=document.getElementById('jobHistoryList');
-    card.style.display='block';
-    list.innerHTML=items.map((x,i)=>'<a href="'+x.url.replace(/"/g,'&quot;')+'" style="display:block;padding:10px;margin:6px 0;border:1px solid #30303b;border-radius:9px;color:#fff;text-decoration:none;background:#08080e;">Reels #'+(i+1)+' — открыть результат</a>').join('');
-  }catch(e){}
+  const mode=document.getElementById('main_editor_voice_mode');
+  const wrap=document.getElementById('voice_sample_wrap');
+  function syncVoice(){
+    if(!mode||!wrap)return;
+    wrap.style.display=mode.value==='clone'?'block':'none';
+    const input=document.getElementById('main_voice_sample');
+    if(input) input.required=mode.value==='clone';
+  }
+  if(mode){mode.addEventListener('change',syncVoice);syncVoice()}
+
+  const history=document.getElementById('jobHistory');
+  if(history){
+    try{
+      const items=JSON.parse(localStorage.getItem('reelforge_job_history')||'[]');
+      if(!items.length){
+        history.innerHTML='<div class="history-item">Пока нет созданных роликов.</div>';
+      }else{
+        history.innerHTML=items.slice(0,8).map(x=>{
+          const title=(x.title||x.topic||'Reel').replace(/[<>&"]/g,'');
+          const date=x.created_at||x.createdAt||'';
+          return '<div class="history-item"><b>'+title+'</b>'+(date?' · '+date:'')+'</div>';
+        }).join('');
+      }
+    }catch(e){
+      history.innerHTML='<div class="history-item">История пока недоступна.</div>';
+    }
+  }
+
+  document.querySelectorAll('form').forEach(form=>{
+    form.addEventListener('submit',function(){
+      if(form.id==='videoUploadForm') return;
+      const overlay=document.getElementById('loadingOverlay');
+      if(overlay) overlay.style.display='flex';
+    });
+  });
 })();
 </script>
 
-<div class="card">
-    <h2>🧠 Сгенерировать сценарий</h2>
-    <p class="card-desc">Введи тему — AI подготовит готовый сценарий для короткого ролика.</p>
-
-    <form action="/generate" method="post">
-        <textarea name="topic" placeholder="Например: 5 лайфхаков для продуктивности..."></textarea>
-        <button class="btn" type="submit">✨ Сгенерировать сценарий</button>
-    </form>
-</div>
-
-<div class="card">
-    <h2>🤖 Reels по промту</h2>
-    <p class="card-desc">
-        Вставь ссылку на сайт или опиши идею.
-        AI изучит страницу, подготовит сценарий, найдёт визуалы и соберёт вертикальный Reels.
-    </p>
-
-    <form action="/prepare_prompt" method="post" enctype="multipart/form-data">
-        <label>🔗 Ссылка на сайт <span style="color:#666">(необязательно)</span></label>
-        <input
-            type="url"
-            name="website_url"
-            placeholder="https://example.com"
-            class="website-input"
-        >
-
-        <label>✨ Что создать? <span style="color:#666">(можно оставить пустым)</span></label>
-        <textarea
-            name="topic"
-            placeholder="Например: Сделай динамичный Reels о продукте, выдели главные преимущества"
-        >{{ generated_script|default("") }}</textarea>
-
-        <label style="margin-top:12px;">🎙️ Озвучка</label>
-        <select name="editor_voice_mode" id="main_editor_voice_mode" style="padding:8px 10px;border-radius:8px;background:#11111a;color:#fff;border:1px solid #30303a;width:100%;">
-            <option value="none">Без озвучки</option>
-            <option value="ai">AI-голос</option>
-            <option value="clone">Мой голос</option>
-        </select>
-
-        <div id="main_voice_clone_upload" style="display:none;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;">
-            <div style="font-weight:600;margin-bottom:6px;">🎙️ Образец моего голоса</div>
-            <small style="display:block;color:#9ca3af;margin-bottom:8px;">Зажми кнопку и читай текст. Отпусти — запись сохранится автоматически.</small>
-            <div style="padding:10px;background:#11111a;border-radius:8px;margin-bottom:10px;">Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!</div>
-            <div style="height:8px;background:#22222c;border-radius:999px;overflow:hidden;margin-top:8px;">
-                <div id="main_voice_record_progress" style="width:0%;height:100%;background:#ff5c35;transition:width .1s;"></div>
-            </div>
-            <button type="button" id="main_voice_record_btn" style="width:100%;padding:14px;border:1px solid #30303a;border-radius:10px;background:#1b1b25;color:#fff;font-size:16px;font-weight:600;user-select:none;-webkit-user-select:none;touch-action:none;">🎙️ Удерживай для записи</button>
-            <div id="main_voice_record_status" style="margin-top:8px;text-align:center;color:#9ca3af;font-size:13px;">Максимум 20 секунд</div>
-
-
-            <div id="main_voice_record_time" style="margin-top:6px;text-align:center;font-size:13px;">00:00 / 00:20</div>
-            <button type="button" id="main_voice_upload_btn" style="width:100%;margin-top:10px;padding:12px;border:1px solid #30303a;border-radius:10px;background:#11111a;color:#fff;font-size:15px;font-weight:600;">📁 Загрузить из памяти телефона</button>
-            <input type="file" name="voice_sample" id="main_voice_sample" accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">
-            <input type="hidden" name="voice_sample_text" value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
-        </div>
-
-        <script>
-        const mainVoiceMode = document.getElementById("main_editor_voice_mode");
-        const mainVoiceClone = document.getElementById("main_voice_clone_upload");
-        const mainVoiceSample = document.getElementById("main_voice_sample");
-        const mainVoiceUploadBtn = document.getElementById("main_voice_upload_btn");
-        mainVoiceUploadBtn.addEventListener("click", e => { e.preventDefault(); mainVoiceSample.click(); });
-        mainVoiceSample.addEventListener("change", () => { if (mainVoiceSample.files && mainVoiceSample.files.length) { mainVoiceRecordStatus.textContent = "✓ Файл голоса выбран — " + mainVoiceSample.files[0].name; mainVoiceRecordBtn.textContent = "🎙️ Удерживай для новой записи"; } });
-        function updateMainVoiceClone() {
-            const clone = mainVoiceMode.value === "clone";
-            mainVoiceClone.style.display = clone ? "block" : "none";
-            mainVoiceSample.required = clone;
-        }
-        mainVoiceMode.addEventListener("change", updateMainVoiceClone);
-        updateMainVoiceClone();
-
-        const mainVoiceRecordBtn = document.getElementById("main_voice_record_btn");
-        const mainVoiceRecordStatus = document.getElementById("main_voice_record_status");
-        const mainVoiceRecordProgress = document.getElementById("main_voice_record_progress");
-        const mainVoiceRecordTime = document.getElementById("main_voice_record_time");
-        let mainVoiceRecorder = null;
-        let mainVoiceChunks = [];
-        let mainVoiceTimer = null;
-        let mainVoiceStartedAt = 0;
-        let mainVoiceStream = null;
-        let mainVoicePointerHeld = false;
-        const MAIN_VOICE_MAX_MS = 20000;
-        function mainVoiceFormatTime(ms) {
-            const sec = Math.min(30, Math.floor(ms / 1000));
-            return String(Math.floor(sec / 60)).padStart(2,"0") + ":" + String(sec % 60).padStart(2,"0");
-        }
-        function mainVoiceStop() {
-            if (mainVoiceRecorder && mainVoiceRecorder.state === "recording") mainVoiceRecorder.stop();
-        }
-        function mainVoiceStart() {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-                mainVoiceRecordStatus.textContent = "Запись голоса не поддерживается этим браузером.";
-                return;
-            }
-            if (mainVoiceRecorder && mainVoiceRecorder.state === "recording") return;
-            if (mainVoiceStream) mainVoiceStream.getTracks().forEach(t => t.stop());
-            navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
-                if (!mainVoicePointerHeld) {
-                    stream.getTracks().forEach(t => t.stop());
-                    return;
-                }
-                mainVoiceStream = stream;
-                mainVoiceChunks = [];
-                mainVoiceStartedAt = Date.now();
-                mainVoiceRecorder = new MediaRecorder(stream, {mimeType:"audio/webm"});
-                mainVoiceRecorder.ondataavailable = e => { if (e.data && e.data.size) mainVoiceChunks.push(e.data); };
-                mainVoiceRecorder.onstop = () => {
-                    clearInterval(mainVoiceTimer);
-                    mainVoiceTimer = null;
-                    stream.getTracks().forEach(t => t.stop());
-                    mainVoiceStream = null;
-                    const elapsed = Math.min(MAIN_VOICE_MAX_MS, Date.now() - mainVoiceStartedAt);
-                    if (elapsed < 1000 || !mainVoiceChunks.length) {
-                        mainVoiceRecordStatus.textContent = "Запись слишком короткая. Удерживай кнопку не менее 1 секунды.";
-                        mainVoiceRecordProgress.style.width = "0%";
-                        mainVoiceRecordTime.textContent = "00:00 / 00:20";
-                        return;
-                    }
-                    const blob = new Blob(mainVoiceChunks, {type:"audio/webm"});
-                    const file = new File([blob], "voice_sample.webm", {type:"audio/webm"});
-                    const dt = new DataTransfer();
-                    dt.items.add(file);
-                    mainVoiceSample.files = dt.files;
-                    mainVoiceRecordStatus.textContent = "✓ Голос записан — " + mainVoiceFormatTime(elapsed);
-                    mainVoiceRecordBtn.textContent = "🎙️ Удерживай для новой записи";
-                };
-                mainVoiceRecorder.start();
-                mainVoiceRecordBtn.textContent = "🔴 Идёт запись… отпусти";
-                mainVoiceRecordStatus.textContent = "Говори естественно";
-                mainVoiceRecordProgress.style.width = "0%";
-                mainVoiceRecordTime.textContent = "00:00 / 00:20";
-                mainVoiceTimer = setInterval(() => {
-                    const elapsed = Date.now() - mainVoiceStartedAt;
-                    const limited = Math.min(elapsed, MAIN_VOICE_MAX_MS);
-                    mainVoiceRecordProgress.style.width = (limited / MAIN_VOICE_MAX_MS * 100) + "%";
-                    mainVoiceRecordTime.textContent = mainVoiceFormatTime(limited) + " / 00:20";
-                    if (elapsed >= MAIN_VOICE_MAX_MS) mainVoiceStop();
-                },100);
-            }).catch(() => {
-                mainVoiceRecordStatus.textContent = "Не удалось получить доступ к микрофону. Разреши доступ и попробуй снова.";
-            });
-        }
-        mainVoiceRecordBtn.addEventListener("pointerdown", e => { e.preventDefault(); mainVoicePointerHeld = true; mainVoiceStart(); });
-        mainVoiceRecordBtn.addEventListener("pointerup", e => { e.preventDefault(); mainVoicePointerHeld = false; mainVoiceStop(); mainVoiceRecordBtn.blur(); });
-        window.addEventListener("pointerup", e => { if (mainVoicePointerHeld) { mainVoicePointerHeld = false; mainVoiceStop(); mainVoiceRecordBtn.blur(); } });
-        mainVoiceRecordBtn.addEventListener("click", e => { e.preventDefault(); mainVoiceRecordBtn.blur(); });
-        mainVoiceRecordBtn.addEventListener("pointercancel", () => { mainVoicePointerHeld = false; mainVoiceStop(); });
-        mainVoiceRecordBtn.addEventListener("pointerleave", e => { if (e.buttons) { mainVoicePointerHeld = false; mainVoiceStop(); } });
-                </script>
-
-        <button class="btn" type="submit">
-            🎬 Создать Reels
-        </button>
-    </form>
-</div>
-
-<div class="card">
-    <h2>📸 Reels из скриншотов</h2>
-    <p class="card-desc">Загрузи изображения — ReelForge добавит субтитры, монтаж и музыку.</p>
-
-    <form action="/create_video" method="post" enctype="multipart/form-data">
-
-        <label>🎯 Тема ролика</label>
-        <textarea name="topic" placeholder="Например: Как пользоваться нашим приложением">{{ generated_script|default("") }}</textarea>
-
-        <label>🖼️ Скриншоты</label>
-        <input class="file" type="file" name="images" multiple accept="image/*">
-
-        <label>🎵 Музыка <span style="color:#666">(необязательно)</span></label>
-        <input class="file" type="file" name="music" accept="audio/*">
-
-        <button class="btn" type="submit">🎬 Собрать Reels из скриншотов</button>
-    </form>
-</div>
-
-<div class="card">
-    <h2>🎥 Reels из видео</h2>
-    <p class="card-desc">Загрузи несколько видео — система сама выберет лучшие моменты и соберёт ролик.</p>
-
-    <form id="videoUploadForm" action="/create_reel_from_videos" method="post" enctype="multipart/form-data">
-
-        <label>🎯 Тема ролика</label>
-        <textarea name="topic" placeholder="Например: Обзор продукта за 30 секунд">{{ generated_script|default("") }}</textarea>
-
-        <label>🎞️ Видео-куски</label>
-        <input class="file" type="file" name="videos" multiple accept="video/*">
-        <p style="color:#666;font-size:13px;margin-top:6px;">
-            Максимум: 100 MB на одно видео и 300 MB на весь проект.
-        </p>
-
-        <label>🎵 Музыка <span style="color:#666">(необязательно)</span></label>
-        <input class="file" type="file" name="music" accept="audio/*">
-
-
-        {{ upload_progress_html|safe }}
-
-
-
-
-        <button class="btn" type="submit">🚀 Собрать Reels из видео</button>
-    </form>
-</div>
-
-<div class="footer">
-    ReelForge AI • Создание коротких видео с помощью AI
-</div>
-
-</div>
-
-<div class="overlay" id="loading">
-    <div class="loader-box">
-        <div class="spinner"></div>
-        <h2>Создаём твой Reels 🚀</h2>
-        <p id="statusText">Подготавливаем файлы...</p>
-
-        <div class="timer" id="timer">00:00</div>
-
-        <div class="progress">
-            <div class="progress-bar"></div>
-        </div>
-
-        <div class="steps">
-            <div class="step active" id="s1"><span class="dot"></span> Загружаем материалы</div>
-            <div class="step" id="s2"><span class="dot"></span> Анализируем контент</div>
-            <div class="step" id="s3"><span class="dot"></span> Создаём сценарий</div>
-            <div class="step" id="s4"><span class="dot"></span> Монтируем видео</div>
-            <div class="step" id="s5"><span class="dot"></span> Финальный рендер</div>
-        </div>
-    </div>
-</div>
-
-<script>
-function showLoading() {
-    const loading = document.getElementById("loading");
-    if (loading) loading.style.display = "flex";
-
-    const timer = document.getElementById("timer");
-    const status = document.getElementById("statusText");
-
-    let seconds = 0;
-
-    if (window.reelForgeTimer) {
-        clearInterval(window.reelForgeTimer);
-    }
-
-    window.reelForgeTimer = setInterval(() => {
-        seconds++;
-
-        const m = String(Math.floor(seconds / 60)).padStart(2, "0");
-        const sec = String(seconds % 60).padStart(2, "0");
-
-        if (timer) timer.textContent = m + ":" + sec;
-    }, 1000);
-
-    if (status) {
-        status.textContent = "Подготавливаем загрузку...";
-    }
-
-    document.querySelectorAll(".step").forEach(x => {
-        x.classList.remove("active");
-    });
-
-    const first = document.getElementById("s1");
-    if (first) first.classList.add("active");
-}
-
-async function uploadVideoForm(form) {
-    if (form.dataset.uploading === "1") {
-        console.warn("[UPLOAD] duplicate submit ignored");
-        return;
-    }
-
-    form.dataset.uploading = "1";
-
-    const btn = form.querySelector("button");
-    const filesInput = form.querySelector('input[name="videos"]');
-    const topicInput = form.querySelector('textarea[name="topic"]');
-    const musicInput = form.querySelector('input[name="music"]');
-
-    const files = Array.from(filesInput.files || []);
-
-    const MAX_VIDEO_SIZE = 100 * 1024 * 1024;
-    const MAX_PROJECT_SIZE = 300 * 1024 * 1024;
-
-    if (!files.length) {
-        alert("Выбери хотя бы одно видео!");
-        return;
-    }
-
-    // Проверяем размер каждого видео до начала загрузки.
-    for (const file of files) {
-        if (file.size > MAX_VIDEO_SIZE) {
-            alert(
-                "Видео слишком большое: " + file.name +
-                "\\n\\nМаксимальный размер одного видео — 100 MB." +
-                "\\nРазмер этого файла — " +
-                (file.size / 1024 / 1024).toFixed(1) + " MB."
-            );
-            return;
-        }
-    }
-
-    // Проверяем общий размер проекта до начала загрузки.
-    const totalVideoSize = files.reduce(
-        (sum, file) => sum + file.size,
-        0
-    );
-
-    if (totalVideoSize > MAX_PROJECT_SIZE) {
-        alert(
-            "Проект слишком большой." +
-            "\\n\\nМаксимальный общий размер видео — 300 MB." +
-            "\\nСейчас выбрано — " +
-            (totalVideoSize / 1024 / 1024).toFixed(1) + " MB."
-        );
-        return;
-    }
-
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = "⏳ Загружаем видео...";
-    }
-
-    showUploadProgress();
-
-    updateUploadProgress(
-        2,
-        "📋 Подготовка загрузки",
-        "Выбрано видео: <b>" + files.length + "</b><br>" +
-        "Общий размер: <b>" +
-        (totalVideoSize / 1024 / 1024).toFixed(1) +
-        " MB</b>"
-    );
-
-    showLoading();
-
-    try {
-        // Создаём сессию загрузки
-        const startData = new URLSearchParams();
-        startData.append("topic", topicInput ? topicInput.value : "");
-        startData.append("total", String(files.length));
-
-        let startResponse;
-        try {
-            startResponse = await fetch("/start_video_upload", {
-                method: "POST",
-                body: startData
-            });
-        } catch (e) {
-            console.error("[FETCH ERROR] /start_video_upload", e);
-            throw new Error("Не удалось связаться с сервером: /start_video_upload — " + e.message);
-        }
-
-        if (!startResponse.ok) {
-            throw new Error("Не удалось начать загрузку");
-        }
-
-        const startResult = await startResponse.json();
-        console.log("[UPLOAD-DEBUG] startResult OK");
-        const jobId = startResult.job_id;
-
-        updateUploadProgress(
-            5,
-            "📤 Загрузка видео",
-            "Сессия создана.<br>Подготавливаем файлы..."
-        );
-
-        // Загружаем каждое видео небольшими частями.
-        // Это предотвращает Failed to fetch на больших multipart-запросах.
-        const VIDEO_CHUNK_SIZE = 4 * 1024 * 1024;
-        console.log("[UPLOAD-DEBUG] entering video chunks");
-
-        for (let i = 0; i < files.length; i++) {
-        console.log("[UPLOAD-DEBUG] VIDEO LOOP START", i + 1, "/", files.length);
-            const file = files[i];
-
-            const totalChunks = Math.ceil(
-                file.size / VIDEO_CHUNK_SIZE
-            );
-
-            if (btn) {
-                btn.innerHTML =
-                    `⏳ Видео ${i + 1} из ${files.length}`;
-            }
-
-            for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-                const start = chunkIndex * VIDEO_CHUNK_SIZE;
-                const end = Math.min(
-                    start + VIDEO_CHUNK_SIZE,
-                    file.size
-                );
-
-                const blob = file.slice(start, end);
-
-                const fd = new FormData();
-
-                fd.append("job_id", jobId);
-                fd.append("index", String(i));
-                fd.append("chunk_index", String(chunkIndex));
-                fd.append("total_chunks", String(totalChunks));
-                fd.append("video", blob, file.name);
-
-                const chunkProgress =
-                    5 +
-                    (
-                        (
-                            i +
-                            ((chunkIndex + 1) / totalChunks)
-                        ) /
-                        files.length
-                    ) * 65;
-
-                updateUploadProgress(
-                    chunkProgress,
-                    "📤 Загружаем видео " +
-                        (i + 1) +
-                        " из " +
-                        files.length,
-                    "Файл: <b>" + file.name + "</b><br>" +
-                    "Часть: <b>" +
-                        (chunkIndex + 1) +
-                        " / " +
-                        totalChunks +
-                    "</b><br>" +
-                    "Размер: <b>" +
-                        (file.size / 1024 / 1024).toFixed(1) +
-                        " MB</b>"
-                );
-
-                console.log("[UPLOAD-DEBUG] BEFORE FETCH chunk", chunkIndex + 1, "/", totalChunks);
-
-                let response;
-
-                try {
-                    response = await fetch("/upload_video_part", {
-                        method: "POST",
-                        body: fd
-                    });
-                } catch (e) {
-                    console.error(
-                        "[FETCH ERROR] /upload_video_part",
-                        e
-                    );
-
-                    throw new Error(
-                        "Не удалось загрузить видео " +
-                        (i + 1) +
-                        ", часть " +
-                        (chunkIndex + 1) +
-                        " из " +
-                        totalChunks +
-                        ": /upload_video_part — " +
-                        (e.message || "Failed to fetch")
-                    );
-                }
-
-                console.log(
-                    "[UPLOAD-DEBUG] RESPONSE chunk",
-                    chunkIndex + 1,
-                    "/",
-                    totalChunks,
-                    "status=",
-                    response.status,
-                    "ok=",
-                    response.ok
-                );
-
-                if (!response.ok) {
-                    let message =
-                        "Ошибка загрузки видео " +
-                        (i + 1) +
-                        ", часть " +
-                        (chunkIndex + 1);
-
-                    try {
-                        const data = await response.json();
-
-                        if (data.error) {
-                            message = data.error;
-                        }
-                    } catch (_) {}
-
-                    throw new Error(message);
-                }
-
-                console.log(
-                    "[UPLOAD-DEBUG] CHUNK OK, next=",
-                    chunkIndex + 2,
-                    "/",
-                    totalChunks
-                );
-            }
-
-            updateUploadProgress(
-                5 +
-                    (((i + 1) / files.length) * 65),
-                "✅ Видео " +
-                    (i + 1) +
-                    " из " +
-                    files.length +
-                    " загружено",
-                "Файл: <b>" +
-                    file.name +
-                    "</b><br>" +
-                "Размер: <b>" +
-                    (file.size / 1024 / 1024).toFixed(1) +
-                    " MB</b><br>" +
-                "Продолжение загрузки..."
-            );
-        }
-
-        updateUploadProgress(
-            72,
-            "🎵 Проверка музыки",
-            "Видео загружены.<br>Проверяем выбранную фоновую музыку..."
-        );
-
-        // Музыка загружается небольшими частями, чтобы избежать
-        // Gunicorn NoMoreData на больших multipart-запросах.
-        const musicInputEl = form.querySelector('input[type="file"][name="music"]');
-        const musicFile =
-            musicInputEl &&
-            musicInputEl.files &&
-            musicInputEl.files.length
-                ? musicInputEl.files[0]
-                : null;
-
-        console.log("[MUSIC-CLIENT] input=", musicInputEl);
-        console.log("[MUSIC-CLIENT] file=", musicFile);
-        console.log(
-            "[MUSIC-CLIENT] name=",
-            musicFile ? musicFile.name : "NONE",
-            "size=",
-            musicFile ? musicFile.size : 0,
-            "type=",
-            musicFile ? musicFile.type : "NONE"
-        );
-
-        if (musicFile) {
-            if (btn) {
-                btn.innerHTML =
-                    "⏳ Музыка: " + musicFile.name +
-                    " (" + Math.round(musicFile.size / 1024 / 1024) + " MB)";
-            }
-            const CHUNK_SIZE = 4 * 1024 * 1024;
-            const totalChunks = Math.ceil(musicFile.size / CHUNK_SIZE);
-
-            for (let i = 0; i < totalChunks; i++) {
-                if (btn) {
-                    btn.innerHTML =
-                        `⏳ Загружаем музыку ${i + 1} из ${totalChunks}...`;
-                }
-
-                updateUploadProgress(
-                    72 + (((i + 1) / totalChunks) * 18),
-                    "🎵 Загружаем музыку " + (i + 1) + " из " + totalChunks,
-                    "Файл: <b>" + musicFile.name + "</b><br>" +
-                    "Часть: <b>" + (i + 1) + " / " + totalChunks + "</b><br>" +
-                    "Размер: <b>" +
-                    (musicFile.size / 1024 / 1024).toFixed(1) +
-                    " MB</b>"
-                );
-
-                const start = i * CHUNK_SIZE;
-                const end = Math.min(start + CHUNK_SIZE, musicFile.size);
-                const blob = musicFile.slice(start, end);
-
-                const musicFd = new FormData();
-                musicFd.append("job_id", jobId);
-                musicFd.append("index", String(i));
-                musicFd.append("total", String(totalChunks));
-                musicFd.append("name", musicFile.name);
-                musicFd.append("chunk", blob, musicFile.name + ".part");
-
-                let musicResponse;
-
-                try {
-                    musicResponse = await fetch("/upload_video_music_part", {
-                        method: "POST",
-                        body: musicFd
-                    });
-                } catch (e) {
-                    throw new Error(
-                        `Ошибка загрузки музыки, часть ${i + 1} из ${totalChunks}: ` +
-                        (e.message || "Failed to fetch")
-                    );
-                }
-
-                if (!musicResponse.ok) {
-                    let message =
-                        `Ошибка загрузки музыки, часть ${i + 1} из ${totalChunks}`;
-
-                    try {
-                        const data = await musicResponse.json();
-                        if (data.error) message = data.error;
-                    } catch (_) {}
-
-                    throw new Error(message);
-                }
-            }
-        }
-
-        // После полной загрузки запускаем уже существующий рендер
-        updateUploadProgress(
-            92,
-            "🎬 Запускаем монтаж",
-            "Все файлы загружены.<br>" +
-            "Передаём проект ReelForge AI на обработку..."
-        );
-
-        if (btn) btn.innerHTML = "🎬 Запускаем монтаж...";
-
-        const finishData = new URLSearchParams();
-        finishData.append("job_id", jobId);
-
-        let finishResponse;
-        try {
-            finishResponse = await fetch("/finish_video_upload", {
-                method: "POST",
-                body: finishData
-            });
-        } catch (e) {
-            console.error("[FETCH ERROR] /finish_video_upload", e);
-            throw new Error("Не удалось завершить загрузку: /finish_video_upload — " + e.message);
-        }
-
-        if (!finishResponse.ok) {
-            let message = "Не удалось запустить обработку";
-            try {
-                const data = await finishResponse.json();
-                if (data.error) message = data.error;
-            } catch (_) {}
-            throw new Error(message);
-        }
-
-        updateUploadProgress(
-            97,
-            "⚙️ Монтаж выполняется",
-            "Видео загружены.<br>" +
-            "AI создаёт субтитры и собирает Reels.<br>" +
-            "<b>Не закрывайте страницу.</b>"
-        );
-
-        setTimeout(() => {
-            window.location.href =
-                "/status/" + jobId + "?access=rf2026free";
-        }, 500);
-
-    } catch (error) {
-        console.error(error);
-        alert("Ошибка загрузки: " + error.message);
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = "🚀 Собрать Reels из видео";
-        }
-        form.dataset.uploading = "0";
-    }
-}
-
-document.querySelectorAll("form").forEach(form => {
-    form.addEventListener("submit", event => {
-        if (form.id === "videoUploadForm") {
-            event.preventDefault();
-
-            // Показываем прогресс МГНОВЕННО при нажатии кнопки.
-            showUploadProgress();
-            updateUploadProgress(
-                1,
-                "📋 Подготовка загрузки",
-                "Проверяем выбранные видео..."
-            );
-
-            // Затем запускаем асинхронную загрузку.
-            uploadVideoForm(form);
-            return;
-        }
-
-        const btn = form.querySelector("button");
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = "⏳ Создаём видео...";
-        }
-
-        showLoading();
-    });
-});
-</script>
-
-
-<div style="text-align:center;margin:24px 0">
-  <a href="https://www.promptfrenzy.com/directory"
-     target="_blank"
-     rel="dofollow"
-     title="Featured on PromptFrenzy AI Directory">
-    <img src="https://www.promptfrenzy.com/badges/directory-mono-light.svg"
-         alt="Featured on PromptFrenzy AI Directory"
-         width="220"
-         height="44"
-         loading="lazy">
-  </a>
-</div>
-
 </body>
 </html>
+
+<section>
+  <div class="container">
+    <div class="final">
+      <div class="kicker">Готовы попробовать?</div>
+      <h2>Идея есть. Осталось превратить её в Reel.</h2>
+      <p class="muted">Начните бесплатно. Первые 3 генерации — после регистрации по email.</p>
+      <div class="actions" style="justify-content:center">
+        <a class="primary" href="/create">Создать видео бесплатно</a>
+        <a class="secondary" href="#examples">Посмотреть примеры</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 """
+
+
 
 RESULT_HTML = """
 <!DOCTYPE html>
@@ -2609,7 +2217,7 @@ RESULT_HTML = """
 
                 <textarea name="script" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;">{{ script }}</textarea>
                 <button class="button download" type="submit" style="border:0;cursor:pointer;">
-                    🎬 Создать Reels из этого сценария
+                    🎬 Создать видео из этого сценария
                 </button>
             </form>
         </div>
@@ -4366,22 +3974,414 @@ def process_video_job(
         traceback.print_exc()
         set_job(job_id, status="error", error=str(e))
 
+CREATE_HTML = """
+
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReelForge AI — Создать Reel</title>
+  <meta name="description" content="Создайте Reel из идеи, скриншотов или видео.">
+  <style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+ margin:0;background:#07070d;color:#f8fafc;
+ font-family:Inter,Arial,sans-serif;line-height:1.5;
+}
+a{color:inherit;text-decoration:none}
+button,input,textarea,select{font:inherit}
+button{cursor:pointer}
+.container{width:min(1160px,calc(100% - 32px));margin:auto}
+.topbar{
+ position:sticky;top:0;z-index:30;
+ background:rgba(7,7,13,.88);backdrop-filter:blur(16px);
+ border-bottom:1px solid #1d1d29;
+}
+.nav{min-height:68px;display:flex;align-items:center;gap:22px}
+.logo{font-size:20px;font-weight:900;letter-spacing:-.5px}
+.logo span{color:#a855f7}
+.navlinks{display:flex;gap:18px;margin-left:auto;color:#a8a8b8;font-size:14px}
+.navlinks a:hover{color:#fff}
+.navcta,.primary{
+ display:inline-flex;align-items:center;justify-content:center;
+ border:0;border-radius:12px;padding:12px 18px;
+ background:linear-gradient(135deg,#8b5cf6,#c026d3);
+ color:#fff;font-weight:800;box-shadow:0 10px 30px rgba(139,92,246,.22);
+}
+.secondary{
+ display:inline-flex;align-items:center;justify-content:center;
+ border:1px solid #343445;border-radius:12px;padding:12px 18px;
+ background:#11111a;color:#fff;font-weight:700;
+}
+.hero{
+ padding:82px 0 55px;
+ background:
+ radial-gradient(circle at 50% 0%,rgba(124,58,237,.22),transparent 42%),
+ radial-gradient(circle at 10% 30%,rgba(217,70,239,.09),transparent 30%);
+}
+.hero-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:50px;align-items:center}
+.eyebrow{
+ display:inline-flex;padding:7px 12px;border:1px solid #303043;border-radius:999px;
+ color:#c4b5fd;background:#11111b;font-size:13px;font-weight:800;
+}
+h1{font-size:clamp(42px,6vw,72px);line-height:1.02;letter-spacing:-2.8px;margin:18px 0}
+.hero p{font-size:19px;color:#a7a7b7;max-width:690px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin:28px 0 18px}
+.note{font-size:13px;color:#777789}
+.hero-card{
+ border:1px solid #29293a;background:linear-gradient(180deg,#12121c,#0d0d14);
+ border-radius:28px;padding:14px;box-shadow:0 30px 80px rgba(0,0,0,.35);
+}
+.hero-video{width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:20px;background:#020307}
+.badge-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.badge{padding:7px 10px;border-radius:999px;background:#171722;border:1px solid #29293a;color:#bfc0ce;font-size:12px}
+section{padding:72px 0}
+.section-head{max-width:760px;margin-bottom:30px}
+.kicker{color:#a78bfa;font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:1.2px}
+h2{font-size:clamp(30px,4vw,48px);line-height:1.08;letter-spacing:-1.5px;margin:9px 0 12px}
+.section-head p{color:#9293a4;font-size:17px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.card{
+ background:#0e0e16;border:1px solid #242434;border-radius:20px;padding:24px;
+}
+.card h3{margin:8px 0;font-size:21px}
+.card p{margin:0 0 18px;color:#9293a4}
+.icon{font-size:30px}
+.card .secondary{width:100%}
+.demo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.demo{
+ background:#0e0e16;border:1px solid #252536;border-radius:20px;padding:10px;
+}
+.demo video{display:block;width:100%;aspect-ratio:9/16;object-fit:cover;border-radius:14px;background:#020307}
+.demo-title{font-weight:850;padding:13px 5px 2px}
+.demo-text{font-size:13px;color:#77798b;padding:2px 5px 9px}
+.variant{
+ display:grid;grid-template-columns:1fr 1fr;gap:25px;align-items:center;
+ background:linear-gradient(135deg,#12101d,#0d0d15);
+ border:1px solid #29283b;border-radius:26px;padding:32px;
+}
+.variant-list{display:grid;gap:10px}
+.variant-item{
+ padding:15px;border-radius:14px;background:#151520;border:1px solid #29293a;
+}
+.variant-item b{display:block;margin-bottom:3px}
+.variant-item span{color:#858697;font-size:13px}
+.pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.step{
+ position:relative;padding:18px 15px;background:#101019;
+ border:1px solid #272737;border-radius:16px;
+}
+.step-num{color:#a78bfa;font-weight:900;font-size:12px}
+.step b{display:block;margin-top:5px}
+.pricing{
+ display:grid;grid-template-columns:repeat(3,1fr);gap:16px;
+}
+.price{
+ background:#0e0e16;border:1px solid #272737;border-radius:20px;padding:26px;
+}
+.price.featured{border-color:#7c3aed;box-shadow:0 0 0 1px rgba(124,58,237,.2)}
+.price h3{margin:0 0 8px;font-size:23px}
+.price-value{font-size:28px;font-weight:900;margin:12px 0}
+.price p,.price li{color:#9293a4}
+.price ul{padding-left:20px;min-height:95px}
+.faq{display:grid;gap:10px;max-width:900px}
+details{background:#0e0e16;border:1px solid #272737;border-radius:15px;padding:17px 19px}
+summary{cursor:pointer;font-weight:800}
+details p{color:#9293a4;margin:12px 0 0}
+.final{
+ text-align:center;padding:70px 20px;border-radius:28px;
+ background:radial-gradient(circle at 50% 0%,rgba(124,58,237,.24),transparent 60%),#0e0e16;
+ border:1px solid #28283a;
+}
+.form-shell{
+ margin-top:25px;background:#0d0d15;border:1px solid #29293a;border-radius:22px;padding:22px;
+}
+.field{margin:12px 0}
+.field label{display:block;font-size:13px;color:#b4b4c2;margin-bottom:7px;font-weight:700}
+.field input,.field textarea,.field select{
+ width:100%;padding:13px;border-radius:11px;border:1px solid #30303f;
+ background:#11111a;color:#fff;outline:none;
+}
+.field textarea{min-height:105px;resize:vertical}
+.file{
+ width:100%;padding:12px;border:1px dashed #3a3a4c;border-radius:12px;
+ background:#0f0f18;color:#aaa;
+}
+.form-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+.history{
+ display:grid;gap:8px;margin-top:15px;
+}
+.history-item{
+ padding:12px 14px;border:1px solid #242434;border-radius:12px;
+ background:#0f0f17;color:#aaa;font-size:13px;
+}
+footer{border-top:1px solid #1d1d29;padding:30px 0 45px;color:#77798b}
+.footer-row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.muted{color:#77798b}
+.upload-progress{margin-top:15px}
+@media(max-width:850px){
+ .navlinks{display:none}
+ .hero{padding-top:55px}
+ .hero-grid,.variant{grid-template-columns:1fr}
+ .cards,.demo-grid,.pricing{grid-template-columns:1fr}
+ .pipeline{grid-template-columns:repeat(2,1fr)}
+ h1{letter-spacing:-1.8px}
+}
+@media(max-width:520px){
+ .container{width:min(100% - 22px,1160px)}
+ section{padding:50px 0}
+ .nav{min-height:60px}
+ .navcta{padding:10px 12px;font-size:13px}
+ .hero{padding:45px 0 35px}
+ .hero p{font-size:16px}
+ .actions>*{width:100%}
+ .pipeline{grid-template-columns:1fr 1fr}
+ .card,.price{padding:20px}
+}
+</style>
+</head>
+<body>
+  <main class="create-page">
+    <div class="create-top">
+      <a class="create-logo" href="/">ReelForge <span>AI</span></a>
+      <a class="create-back" href="/">← На главную</a>
+    </div>
+
+    {% if not has_user %}
+    <section class="email-gate">
+      <div class="kicker">Бесплатный старт</div>
+      <h1>Создайте первый Reel бесплатно</h1>
+      <p>Введите email, чтобы открыть создание видео.</p>
+      <p><strong>Вам доступны 3 бесплатные генерации.</strong></p>
+
+      <form action="/collect-email" method="get">
+        <div class="field">
+          <label for="rf-email">Ваш email</label>
+          <input id="rf-email" name="email" type="email"
+                 autocomplete="email" required
+                 placeholder="you@example.com">
+        </div>
+        <button type="submit">Продолжить бесплатно</button>
+      </form>
+    </section>
+    {% else %}
+
+    <section class="create-heading">
+      <div class="kicker">Создать</div>
+      <h1>Создайте свой Reel</h1>
+      <p>Выберите идею, скриншоты или видео.</p>
+    </section>
+
+    <section id="forms">
+  <div class="container">
+    <div class="section-head">
+      <div class="kicker">Создать</div>
+      <h2>Начните прямо сейчас</h2>
+      <p>Выберите подходящий способ. Существующие функции ReelForge AI остаются доступны ниже.</p>
+    </div>
+
+    <div class="form-shell" id="idea-form">
+      <h3>💡 Создать Reel из идеи</h3>
+      <p class="muted">Сначала подготовим сценарий и параметры будущего ролика.</p>
+
+      <form action="/generate" method="post">
+        <div class="field">
+          <label>Тема</label>
+          <textarea name="topic" placeholder="Например: 5 лайфхаков для продуктивности..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">Создать сценарий</button>
+        </div>
+      </form>
+
+      <hr style="border:0;border-top:1px solid #242434;margin:25px 0">
+
+      <form action="/prepare_prompt" method="post" enctype="multipart/form-data">
+        <div class="field">
+          <label>Сайт или ссылка на материал — необязательно</label>
+          <input name="website_url" type="url" placeholder="https://example.com">
+        </div>
+        <div class="field">
+          <label>Идея для Reels</label>
+          <textarea name="topic" placeholder="Что хотите показать в ролике?"></textarea>
+        </div>
+        <div class="field">
+          <label>Озвучка</label>
+          <select name="editor_voice_mode" id="main_editor_voice_mode">
+            <option value="none">Без дополнительной настройки</option>
+            <option value="ai">ИИ-голос</option>
+            <option value="clone">Мой голос</option>
+          </select>
+        </div>
+        <div class="field" id="voice_sample_wrap" style="display:none">
+          <label>Образец голоса</label>
+          <input type="file" name="voice_sample" id="main_voice_sample"
+                 accept=".webm,audio/webm,.wav,audio/wav,.mp3,audio/mpeg,.m4a,audio/mp4,.ogg,audio/ogg,.flac,audio/flac">
+          <input type="hidden" name="voice_sample_text"
+                 value="Здравствуйте! Это образец моего голоса. Сегодня я записываю короткий тест для создания видео. Один, два, три, четыре, пять, шесть, семь, восемь, девять, десять. Спасибо!">
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">Подготовить Reel</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="form-shell" id="screens-form">
+      <h3>🖼️ Reels из скриншотов</h3>
+      <p class="muted">Загрузите изображения и, при желании, свою музыку.</p>
+
+      <form action="/create_video" method="post" enctype="multipart/form-data">
+        <div class="field">
+          <label>Тема ролика</label>
+          <textarea name="topic" placeholder="Например: Как пользоваться нашим приложением">{{ generated_script|default("") }}</textarea>
+        </div>
+        <div class="field">
+          <label>Скриншоты или изображения</label>
+          <input class="file" type="file" name="images" multiple accept="image/*">
+        </div>
+        <div class="field">
+          <label>Музыка — необязательно</label>
+          <input class="file" type="file" name="music" accept="audio/*">
+        </div>
+        <div class="form-actions">
+          <button class="primary" type="submit">Создать Reel из скриншотов</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="form-shell" id="video-form">
+      <h3>🎬 Reels из видео</h3>
+      <p class="muted">Загрузите свои клипы. Большие видео отправляются частями с отображением прогресса.</p>
+
+      <form id="videoUploadForm" action="/create_reel_from_videos" method="post" enctype="multipart/form-data">
+        <div class="field">
+          <label>Тема ролика</label>
+          <textarea name="topic" placeholder="Например: Обзор продукта за 30 секунд">{{ generated_script|default("") }}</textarea>
+        </div>
+        <div class="field">
+          <label>Видео</label>
+          <input class="file" type="file" name="videos" multiple accept="video/*">
+        </div>
+        <div class="field">
+          <label>Музыка — необязательно</label>
+          <input class="file" type="file" name="music" accept="audio/*">
+        </div>
+
+        {{ upload_progress_html|safe }}
+
+        <div class="form-actions">
+          <button class="primary" type="submit">Создать Reel из видео</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="form-shell">
+      <h3>🕘 Последние задания</h3>
+      <p class="muted">История созданных роликов сохраняется в этом браузере.</p>
+      <div id="jobHistory" class="history"></div>
+    </div>
+  </div>
+</section>
+
+    <footer>
+  <div class="container footer-row">
+    <div>
+      <div class="logo">ReelForge <span>AI</span></div>
+      <div class="muted" style="margin-top:5px">Создание коротких видео с помощью ИИ.</div>
+    </div>
+    <div class="muted">© ReelForge AI</div>
+  </div>
+</footer>
+
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(4,4,9,.9);backdrop-filter:blur(8px);align-items:center;justify-content:center">
+  <div style="text-align:center;padding:30px">
+    <div style="width:48px;height:48px;border:4px solid #333;border-top-color:#a855f7;border-radius:50%;animation:spin 1s linear infinite;margin:auto"></div>
+    <h3 style="margin:20px 0 6px">Готовим ваш Reel…</h3>
+    <p style="color:#999">Не закрывайте страницу во время обработки.</p>
+  </div>
+</div>
+
+<style>
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+
+<script>
+(function(){
+  const mode=document.getElementById('main_editor_voice_mode');
+  const wrap=document.getElementById('voice_sample_wrap');
+  function syncVoice(){
+    if(!mode||!wrap)return;
+    wrap.style.display=mode.value==='clone'?'block':'none';
+    const input=document.getElementById('main_voice_sample');
+    if(input) input.required=mode.value==='clone';
+  }
+  if(mode){mode.addEventListener('change',syncVoice);syncVoice()}
+
+  const history=document.getElementById('jobHistory');
+  if(history){
+    try{
+      const items=JSON.parse(localStorage.getItem('reelforge_job_history')||'[]');
+      if(!items.length){
+        history.innerHTML='<div class="history-item">Пока нет созданных роликов.</div>';
+      }else{
+        history.innerHTML=items.slice(0,8).map(x=>{
+          const title=(x.title||x.topic||'Reel').replace(/[<>&"]/g,'');
+          const date=x.created_at||x.createdAt||'';
+          return '<div class="history-item"><b>'+title+'</b>'+(date?' · '+date:'')+'</div>';
+        }).join('');
+      }
+    }catch(e){
+      history.innerHTML='<div class="history-item">История пока недоступна.</div>';
+    }
+  }
+
+  document.querySelectorAll('form').forEach(form=>{
+    form.addEventListener('submit',function(){
+      if(form.id==='videoUploadForm') return;
+      const overlay=document.getElementById('loadingOverlay');
+      if(overlay) overlay.style.display='flex';
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
+
+    {% endif %}
+  </main>
+</body>
+</html>
+
+"""
+
 @app.route("/")
 def index():
-    script = request.args.get("script", "")
     return render_template_string(
         INDEX_HTML,
         upload_progress_html=UPLOAD_PROGRESS_HTML,
-        generated_script=script
+        generated_script=""
+    )
+
+@app.route("/create")
+def create():
+    return render_template_string(
+        CREATE_HTML,
+        upload_progress_html=UPLOAD_PROGRESS_HTML,
+        generated_script=request.args.get("script", ""),
+        has_user=bool(request.cookies.get("rf_user_key"))
     )
 
 @app.route("/prepare_reel", methods=["POST"])
 def prepare_reel():
     script = request.form.get("script", "")
     return render_template_string(
-        INDEX_HTML,
+        CREATE_HTML,
         upload_progress_html=UPLOAD_PROGRESS_HTML,
-        generated_script=script
+        generated_script=script,
+        has_user=bool(request.cookies.get("rf_user_key"))
     )
 
 @app.route("/generate", methods=["POST"])
@@ -4628,7 +4628,7 @@ PROMPT_PREVIEW_HTML = """
 
 
             <button class="button" type="submit">
-                🎬 Создать Reels
+                🎬 Создать видео
             </button>
         </form>
 
@@ -7716,7 +7716,7 @@ def collect_email():
         print(f"[EMAIL] ERROR: {e}", flush=True)
         return "Ошибка сохранения email", 500
 
-    response = redirect("/")
+    response = redirect("/create")
 
     response.set_cookie(
         "rf_user_key",

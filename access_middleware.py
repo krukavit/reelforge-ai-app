@@ -2,10 +2,7 @@ from flask import request, redirect
 import os
 import psycopg
 
-LANDING_URL = os.environ.get(
-    "LANDING_URL",
-    "https://reelforge-landing-steel.vercel.app"
-)
+LANDING_URL = "/"
 
 ACCESS_TOKEN = "rf2026free"
 
@@ -98,7 +95,11 @@ def check_access():
     - Иначе используется индивидуальный free_entries_limit.
     """
 
-    if request.path == "/health":
+    if request.path in ("/", "/create", "/health"):
+        return None
+
+    # Публичные ресурсы landing: demo-видео, изображения, JS/CSS и т.п.
+    if request.path.startswith("/static/"):
         return None
 
     # Публичная страница для AI-каталогов и автоматической проверки.
@@ -135,7 +136,7 @@ def check_access():
 
     # Без email/user_key пользователь не получает доступ.
     if not user_key:
-        return redirect(f"{LANDING_URL}?redirected=1", code=302)
+        return redirect("/", code=302)
 
     access = get_user_access(user_key)
 
