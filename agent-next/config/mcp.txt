@@ -1,0 +1,7 @@
+MCP_URL=http://127.0.0.1:18081/mcp
+MCP_PROTOCOL=2025-06-18
+MCP_TOKEN_FILE=~/.config/reelforge-agent-next/bridge.token
+# Override with REELFORGE_MCP_TOKEN_FILE for a different local credential path.
+MCP_SESSION_REQUIRED=true
+MCP_ACCEPT=text/event-stream,application/json
+MCP_TIMEOUT=120

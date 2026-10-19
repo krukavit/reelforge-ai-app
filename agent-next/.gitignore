@@ -1,0 +1,17 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+
+# Runtime databases and SQLite sidecars
+state/*.db
+state/*.db-*
+state/*.sqlite
+state/*.sqlite3
+
+# Runtime logs and process markers
+*.log
+*.pid
+
+# Local backups and temporary files
+*.backup-*
+*.tmp
