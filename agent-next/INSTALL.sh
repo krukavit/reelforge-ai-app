@@ -51,13 +51,35 @@ else
   mkdir -p "$TARGET"
 fi
 
-# Source/config/tests are replaced from the archive.
-# The shared MCP/Core/Bridge/TNNL stack is external to the Agent Next package
-# and is never created, replaced, or copied by this installer.
+# Preserve the installation-specific MCP config before replacing source files.
+# The shared MCP/Core/Bridge/TNNL stack remains external to this package.
+PRESERVED_MCP_CONFIG=""
+
+# Always remove the temporary copy, including when installation exits on error.
+cleanup_preserved_mcp_config() {
+  if [ -n "${PRESERVED_MCP_CONFIG:-}" ]; then
+    rm -f -- "$PRESERVED_MCP_CONFIG"
+  fi
+}
+trap cleanup_preserved_mcp_config EXIT
+
+if [ -f "$TARGET/config/mcp.txt" ]; then
+  PRESERVED_MCP_CONFIG="$(mktemp "$HOME/.agent-next-mcp-config.XXXXXX")"
+  cp -p "$TARGET/config/mcp.txt" "$PRESERVED_MCP_CONFIG"
+fi
+
 rm -rf "$TARGET/app" "$TARGET/config" "$TARGET/tests"
 cp -a "$SCRIPT_DIR/app" "$TARGET/app"
 cp -a "$SCRIPT_DIR/config" "$TARGET/config"
 cp -a "$SCRIPT_DIR/tests" "$TARGET/tests"
+
+# Existing installation config wins; fresh installs get a copy of the template.
+if [ -n "$PRESERVED_MCP_CONFIG" ]; then
+  cp -p "$PRESERVED_MCP_CONFIG" "$TARGET/config/mcp.txt"
+  rm -f "$PRESERVED_MCP_CONFIG"
+elif [ -f "$TARGET/config/mcp.example.txt" ]; then
+  cp -p "$TARGET/config/mcp.example.txt" "$TARGET/config/mcp.txt"
+fi
 
 # Install the deterministic Agent Next command/verification entrypoints.
 cp -a "$SCRIPT_DIR/agent.py" "$TARGET/agent.py"

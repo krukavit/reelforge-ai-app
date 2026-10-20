@@ -13,7 +13,7 @@ Status: FINAL SOURCE — LOCAL + LIVE ACCEPTANCE GATES GREEN; CLEAN EXTRACTION/I
 - `agent.py`: deterministic Agent Next CLI over TaskExecutor/Runner/Policy/MCPWorker; no arbitrary shell interface.
 - `verify.sh`: single local verification entrypoint for compile/tests/self-test/registry.
 - `app/`: runtime orchestration, policy, state, confirmation, MCP client/worker, recovery.
-- `config/`: operational contracts and MCP configuration.
+- `config/`: operational contracts and the public `mcp.example.txt` template. Installation-specific `mcp.txt` is excluded from version control and distribution.
 - `state/capability_registry.json`: clean bootstrap capability snapshot used for offline validation; live `tools/list` remains the runtime source of truth and must refresh/reconcile this inventory.
 - `tests/`: bottom-up checks plus `tests/run_all.py`. Standalone probes are invoked as Python modules from the project root (for example, `python -m tests.probe_workers`).
 - `INSTALL.md`: safe installation and one-time credential migration instructions.

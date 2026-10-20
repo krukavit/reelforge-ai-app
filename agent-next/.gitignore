@@ -15,3 +15,6 @@ state/*.sqlite3
 # Local backups and temporary files
 *.backup-*
 *.tmp
+
+# Installation-specific MCP configuration
+/config/mcp.txt

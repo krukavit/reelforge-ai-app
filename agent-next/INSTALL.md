@@ -32,6 +32,18 @@ Recommended target: `~/reelforge-agent-next`. Preserve any existing Next directo
 
 Agent Next must not use the old Agent directory as a runtime credential dependency. The archive contains no credentials. The Bridge credential must already exist in an Agent-Next-owned secure path, or be supplied via `REELFORGE_MCP_TOKEN_FILE`. Do not print or copy secrets into the project tree.
 
+### MCP configuration
+
+The source package includes `config/mcp.example.txt`, a generic configuration
+template. A fresh installation copies it to `config/mcp.txt`. When replacing
+an existing installation, the installer preserves that installation's
+`config/mcp.txt` instead of overwriting it with the template.
+
+`config/mcp.txt` is installation-specific and must not be committed or
+distributed. The token itself belongs in a separate protected file referenced
+by `MCP_TOKEN_FILE` or `REELFORGE_MCP_TOKEN_FILE`; never put the token in the
+configuration file or source tree.
+
 ## First checks
 
 From the installed project root:
