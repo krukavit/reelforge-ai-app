@@ -178,7 +178,60 @@ class VoiceLoop:
         finally:
             snapshot.unlink(missing_ok=True)
 
+    def _prepare_providers(self) -> tuple[str, str, str]:
+        """Validate local provider configuration before microphone capture."""
+        stt_provider = self.speech.validate_configuration()
+
+        conversation = getattr(self.service, "conversation", None)
+        llm = getattr(conversation, "llm", None)
+        if llm is None:
+            raise RuntimeError("LLM_PROVIDER_PRECHECK_UNAVAILABLE")
+
+        configured = getattr(llm, "providers", None)
+        candidates = list(configured) if configured else [llm]
+        failures = []
+        selected = None
+
+        for candidate in candidates:
+            validate = getattr(candidate, "validate_configuration", None)
+            if not callable(validate):
+                failures.append(
+                    RuntimeError("LLM_PROVIDER_PRECHECK_UNAVAILABLE")
+                )
+                continue
+            try:
+                validate()
+            except Exception as exc:
+                failures.append(exc)
+                continue
+            selected = candidate
+            break
+
+        if selected is None:
+            if failures:
+                raise failures[0]
+            raise RuntimeError("LLM_PROVIDER_PRECHECK_UNAVAILABLE")
+
+        return (
+            stt_provider,
+            str(getattr(selected, "provider", "unknown")),
+            str(getattr(selected, "model", "unknown")),
+        )
+
     def run(self, target_root=None) -> None:
+        print("VOICE_LOOP=STARTING", flush=True)
+        try:
+            stt_provider, llm_provider, llm_model = self._prepare_providers()
+        except Exception as exc:
+            reason = str(exc).replace("\\n", " ").replace("\\r", " ")
+            print(f"VOICE_LOOP=PROVIDER_NOT_READY reason={reason}", flush=True)
+            raise SystemExit(2) from None
+
+        print(
+            f"PROVIDERS_READY stt={stt_provider} "
+            f"llm={llm_provider} model={llm_model}",
+            flush=True,
+        )
         self.capture_dir.mkdir(parents=True, exist_ok=True)
         print(
             f"VOICE_LOOP=STARTED pause_seconds={self.pause_seconds}; "
