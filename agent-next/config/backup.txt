@@ -1,0 +1,5 @@
+BACKUP_RETENTION_ENABLED=true
+BACKUP_MAX_PER_TARGET=5
+# Automatic cleanup only removes regular files already recorded as
+# successful Agent-Next backups. Directories and symlinks are never removed.
+# The newest BACKUP_MAX_PER_TARGET successful backups are always retained.

@@ -1,0 +1,5 @@
+# Reference policy contract. Runtime authority: app/policy.py
+AUTO=system_info,health,process_list,ls,read,search,battery,clipboard_get,wifi_info,public_ip,weather,speedtest,diff,cron_list,diagnose,optimize,git_status,recipe_list,context,session_list,session_poll,history,cancel,text_extract
+VALIDATED=backup,mkdir,screenshot,camera_photo,notify,tts_speak,qrcode,image_process,clipboard_set,toast,download,open_url,context_save,session_start
+CONFIRM=process_kill,write,delete,location,sms_send,sms_inbox,restore,cron_add,cron_remove,cloud_sync,smart_install,share,git_pr,recipe_run,recipe_save,session_kill,history_save,history_clear
+ALWAYS_BLOCK=run,session_run

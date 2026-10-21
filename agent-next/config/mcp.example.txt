@@ -1,0 +1,9 @@
+# Public template for a local Agent Next MCP installation.
+# Adjust MCP_URL and MCP_TOKEN_FILE for your own environment.
+# Never put the token itself in this file.
+MCP_URL=http://127.0.0.1:18081/mcp
+MCP_PROTOCOL=2025-06-18
+MCP_TOKEN_FILE=~/.config/reelforge-agent-next/bridge.token
+MCP_SESSION_REQUIRED=true
+MCP_ACCEPT=text/event-stream,application/json
+MCP_TIMEOUT=120

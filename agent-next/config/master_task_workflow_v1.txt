@@ -1,0 +1,18 @@
+BUILD_NEXT_WORKFLOW_V1
+TARGET=~/reelforge-agent-next
+GOAL=Build autonomous task workflow using existing Policy Runner State Worker Executor Recovery
+REUSE=existing MCP Core Bridge transport
+DO_NOT_CREATE=second MCP, second Bridge, second transport, ADB, Accessibility, Android daemon, new dependencies
+REQUIRE=backup_before_edit
+REQUIRE=test_before_commit
+REQUIRE=LLM_cannot_authorize
+REQUIRE=run_and_session_run_always_blocked
+REQUIRE=persistent_state
+REQUIRE=RECOVERY_REASONS
+REQUIRE=BLOCKED_ON_USER_ACTION
+REQUIRE=execution_report
+REQUIRE=installed_reused_install_reason
+SCOPE=workflow,recovery,reports,tests
+DO_NOT_TOUCH=production
+DO_NOT_DEPLOY=production
+STOP_IF=CONFIRM_REQUIRED
