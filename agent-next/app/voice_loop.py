@@ -231,6 +231,12 @@ class VoiceLoop:
                 raise failures[0]
             raise RuntimeError("LLM_PROVIDER_PRECHECK_UNAVAILABLE")
 
+        # Keep runtime's first attempted adapter consistent with preflight.
+        # Preserve the relative order of all remaining fallback providers.
+        if configured and selected in configured:
+            configured.remove(selected)
+            configured.insert(0, selected)
+
         return (
             stt_provider,
             str(getattr(selected, "provider", "unknown")),

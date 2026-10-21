@@ -178,6 +178,29 @@ def test_voice_loop_preflight_uses_ready_fallback_provider():
     assert events == ["stt_ready", "llm_ready", "llm_ready"], events
 
 
+
+def test_voice_loop_preflight_moves_ready_fallback_to_runtime_first():
+    events = []
+    primary = FakeLLMProvider(events, error="PRIMARY_UNAVAILABLE")
+    primary.provider = "primary"
+    secondary = FakeLLMProvider(events)
+    secondary.provider = "secondary"
+    secondary.model = "secondary-model"
+
+    loop = VoiceLoop(
+        speech=FakeSpeech(events),
+        service=FakeService(primary),
+        capture_dir=Path(tempfile.mkdtemp()),
+    )
+    providers = loop.service.conversation.llm.providers
+    providers.append(secondary)
+
+    result = loop._prepare_providers()
+
+    assert result == ("fake-stt", "secondary", "secondary-model"), result
+    assert providers == [secondary, primary], providers
+    assert events == ["stt_ready", "llm_ready", "llm_ready"], events
+
 def test_voice_loop_all_llm_providers_unavailable():
     events = []
     primary = FakeLLMProvider(events, error="PRIMARY_UNAVAILABLE")
