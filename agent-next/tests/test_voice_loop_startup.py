@@ -5,6 +5,7 @@ import io
 import tempfile
 from pathlib import Path
 
+from app.speech import SpeechToText
 from app.voice_loop import VoiceLoop
 
 
@@ -57,6 +58,31 @@ def make_loop(events, stt_error=None, llm_error=None):
         capture_dir=Path(tempdir.name),
     )
     return loop, tempdir
+
+
+def test_voice_loop_preflight_supports_real_speech_to_text_without_validator(
+    monkeypatch,
+):
+    events = []
+    speech = SpeechToText(provider="auto", voice_capture=object())
+
+    # Simulate missing Groq credentials without reading key files or making
+    # network calls. The existing STT implementation then falls back to Termux.
+    monkeypatch.setattr(speech, "_get_api_key", lambda: "")
+
+    llm_provider = FakeLLMProvider(events)
+    service = FakeService(llm_provider)
+
+    with tempfile.TemporaryDirectory() as tempdir:
+        loop = VoiceLoop(
+            speech=speech,
+            service=service,
+            capture_dir=Path(tempdir),
+        )
+        result = loop._prepare_providers()
+
+    assert result == ("termux", "fake-llm", "fake-model"), result
+    assert events == ["llm_ready"], events
 
 
 def test_voice_loop_checks_providers_before_microphone():

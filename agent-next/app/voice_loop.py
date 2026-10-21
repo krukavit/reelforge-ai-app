@@ -180,7 +180,26 @@ class VoiceLoop:
 
     def _prepare_providers(self) -> tuple[str, str, str]:
         """Validate local provider configuration before microphone capture."""
-        stt_provider = self.speech.validate_configuration()
+        validate_stt = getattr(self.speech, "validate_configuration", None)
+        if callable(validate_stt):
+            stt_provider = validate_stt()
+        else:
+            # SpeechToText currently exposes provider/key helpers, not a
+            # validate_configuration() method. Match its local failover path.
+            provider = str(
+                getattr(self.speech, "provider", "auto")
+            ).strip().lower()
+
+            if provider not in {"auto", "groq", "termux"}:
+                raise RuntimeError("STT_PROVIDER_INVALID")
+
+            if provider == "termux":
+                stt_provider = "termux"
+            else:
+                get_api_key = getattr(self.speech, "_get_api_key", None)
+                if not callable(get_api_key):
+                    raise RuntimeError("STT_PROVIDER_PRECHECK_UNAVAILABLE")
+                stt_provider = "groq" if get_api_key() else "termux"
 
         conversation = getattr(self.service, "conversation", None)
         llm = getattr(conversation, "llm", None)
